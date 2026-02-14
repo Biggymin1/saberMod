@@ -25,6 +25,68 @@ class RecentPage extends StatefulWidget {
   State<RecentPage> createState() => _RecentPageState();
 }
 
+class _WelcomeClockState extends State<WelcomeClock> {
+  late Timer _timer;
+  DateTime _currentTime = DateTime.now();
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      setState(() {
+        _currentTime = DateTime.now();
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer.cancel();
+    super.dispose();
+  }
+
+  String _formatTime(DateTime time) {
+    final hour = time.hour.toString().padLeft(2, '0');
+    final minute = time.minute.toString().padLeft(2, '0');
+    final second = time.second.toString().padLeft(2, '0');
+    return '$hour:$minute:$second';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Welcome Amin',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: Theme.of(context).colorScheme.onSurface,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          _formatTime(_currentTime),
+          style: TextStyle(
+            fontSize: 14,
+            fontFamily: 'monospace',
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class WelcomeClock extends StatefulWidget {
+  const WelcomeClock({super.key});
+
+  @override
+  State<WelcomeClock> createState() => _WelcomeClockState();
+}
+
 class _RecentPageState extends State<RecentPage> {
   final List<String> filePaths = [];
   var failed = false;
@@ -129,10 +191,7 @@ class _RecentPageState extends State<RecentPage> {
                 pinned: true,
                 scrolledUnderElevation: 1,
                 flexibleSpace: FlexibleSpaceBar(
-                  title: Text(
-                    t.home.titles.home,
-                    style: TextStyle(color: colorScheme.onSurface),
-                  ),
+                  title: const WelcomeClock(),
                   centerTitle: false,
                   titlePadding: const EdgeInsetsDirectional.only(
                     start: 16,
