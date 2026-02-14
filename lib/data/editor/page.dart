@@ -24,6 +24,11 @@ class EditorPage extends ChangeNotifier implements HasSize {
   static const double defaultHeight = defaultWidth * 1.4;
   static const defaultSize = Size(defaultWidth, defaultHeight);
 
+  /// Whiteboard uses a single large canvas (3000x3000)
+  static const double whiteboardWidth = 3000;
+  static const double whiteboardHeight = 3000;
+  static const Size whiteboardSize = Size(whiteboardWidth, whiteboardHeight);
+
   @override
   final Size size;
 
