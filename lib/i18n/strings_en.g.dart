@@ -1209,6 +1209,27 @@ class TranslationsEditorMenuEn {
 	/// en: 'Delete page'
 	String get deletePage => 'Delete page';
 
+	/// en: 'Bookmark page'
+	String get addBookmark => 'Bookmark page';
+
+	/// en: 'Remove bookmark'
+	String get removeBookmark => 'Remove bookmark';
+
+	/// en: 'Bookmarks'
+	String get bookmarks => 'Bookmarks';
+
+	/// en: 'Set bookmark name'
+	String get setBookmarkName => 'Set bookmark name';
+
+	/// en: 'Bookmark name'
+	String get bookmarkName => 'Bookmark name';
+
+	/// en: 'Edit bookmark'
+	String get editBookmark => 'Edit bookmark';
+
+	/// en: 'Enter a name for this bookmark (e.g., "Ochem tutorial")'
+	String get bookmarkNameHint => 'Enter a name for this bookmark (e.g., "Ochem tutorial")';
+
 	/// en: 'Line height'
 	String get lineHeight => 'Line height';
 
