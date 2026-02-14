@@ -1209,6 +1209,15 @@ class TranslationsEditorMenuEn {
 	/// en: 'Delete page'
 	String get deletePage => 'Delete page';
 
+	/// en: 'Bookmark page'
+	String get addBookmark => 'Bookmark page';
+
+	/// en: 'Remove bookmark'
+	String get removeBookmark => 'Remove bookmark';
+
+	/// en: 'Bookmarks'
+	String get bookmarks => 'Bookmarks';
+
 	/// en: 'Line height'
 	String get lineHeight => 'Line height';
 

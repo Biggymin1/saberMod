@@ -322,6 +322,9 @@ editor:
     insertPage: Insert page below
     duplicatePage: Duplicate page
     deletePage: Delete page
+    addBookmark: Bookmark page
+    removeBookmark: Remove bookmark
+    bookmarks: Bookmarks
     lineHeight: Line height
     lineHeightDescription: Also controls the text size for typed notes
     lineThickness: Line thickness
