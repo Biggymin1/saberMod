@@ -124,24 +124,25 @@ class FileManager {
     final rootDir = Directory(documentsDirectory);
     await rootDir.create(recursive: true);
     if (Platform.isIOS) return;
+    final normalizedDocumentsDirectory = documentsDirectory.replaceAll('\\', '/');
     rootDir.watch(recursive: true).listen((event) {
       final FileOperationType type = switch (event.type) {
-        FileSystemEvent.delete => .delete,
-        FileSystemEvent.create => .write,
-        FileSystemEvent.modify => .write,
-        FileSystemEvent.move => .write,
+        FileSystemEvent.delete => FileOperationType.delete,
+        FileSystemEvent.create => FileOperationType.write,
+        FileSystemEvent.modify => FileOperationType.write,
+        FileSystemEvent.move => FileOperationType.write,
         _ =>
           kDebugMode
               ? throw UnimplementedError(
                   'Unhandled FileSystemEvent type: ${event.type}',
                 )
-              : .write,
+              : FileOperationType.write,
       };
       final String path = event.path
           .replaceAll('\\', '/')
           // The path may or may not be relative,
           // so remove the root directory path to make sure it's relative.
-          .replaceFirst(documentsDirectory, '');
+          .replaceFirst(normalizedDocumentsDirectory, '');
       broadcastFileWrite(type, path);
     });
   }
@@ -833,6 +834,8 @@ class FileManager {
           ),
         );
       }
+
+      inputStream.close();
     } else {
       // import sbn or sbn2
       final file = File(path);
