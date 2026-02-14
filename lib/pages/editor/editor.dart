@@ -204,17 +204,43 @@ class EditorState extends State<Editor> {
   }
 
   Future _initStrokes() async {
-    coreInfo = await EditorCoreInfo.loadFromFilePath(coreInfo.filePath);
-    if (coreInfo.readOnly) {
-      log.info('Loaded file as read-only');
+    // For whiteboard: delete old saved data and create fresh with single large canvas
+    if (coreInfo.filePath == Whiteboard.filePath) {
+      // Delete existing whiteboard file to start fresh
+      final wbPath = coreInfo.filePath + Editor.extension;
+      try {
+        await FileManager.deleteFile(wbPath);
+        log.info('Deleted old whiteboard file to create fresh large canvas');
+      } catch (e) {
+        // File might not exist, that's fine
+      }
+      try {
+        final oldWbPath = coreInfo.filePath + Editor.extensionOldJson;
+        await FileManager.deleteFile(oldWbPath);
+      } catch (e) {
+        // File might not exist, that's fine
+      }
+
+      // Create fresh whiteboard with single large canvas (3000x3000)
+      coreInfo = EditorCoreInfo(filePath: coreInfo.filePath, readOnly: false);
+    } else {
+      coreInfo = await EditorCoreInfo.loadFromFilePath(coreInfo.filePath);
+      if (coreInfo.readOnly) {
+        log.info('Loaded file as read-only');
+      }
     }
 
     for (int pageIndex = 0; pageIndex < coreInfo.pages.length; pageIndex++) {
       listenToQuillChanges(coreInfo.pages[pageIndex].quill, pageIndex);
     }
 
-    if (coreInfo.isEmpty) {
-      createPage(-1);
+    if (coreInfo.isEmpty || coreInfo.filePath == Whiteboard.filePath) {
+      // For whiteboard, always create a fresh single large page
+      // Clear any existing pages first
+      coreInfo.pages.clear();
+      // Create single large 3000x3000 canvas
+      coreInfo.pages.add(EditorPage(size: EditorPage.whiteboardSize));
+      listenToQuillChanges(coreInfo.pages[0].quill, 0);
     } else {
       for (final page in coreInfo.pages) {
         page.backgroundImage?.onMoveImage = onMoveImage;
