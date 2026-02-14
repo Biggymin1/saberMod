@@ -43,6 +43,58 @@ class _EditorPageManagerState extends State<EditorPageManager> {
     transformationController: widget.transformationController,
   );
 
+  Future<void> _showBookmarkDialog(int pageIndex) async {
+    final page = widget.coreInfo.pages[pageIndex];
+    final isEditing = page.bookmarkName != null;
+    final controller = TextEditingController(text: page.bookmarkName ?? '');
+
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          isEditing
+              ? t.editor.menu.editBookmark
+              : t.editor.menu.setBookmarkName,
+        ),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: InputDecoration(
+            hintText: t.editor.menu.bookmarkNameHint,
+            labelText: t.editor.menu.bookmarkName,
+          ),
+        ),
+        actions: [
+          if (isEditing)
+            TextButton(
+              onPressed: () =>
+                  Navigator.pop(context, null), // null means remove
+              child: Text(t.editor.menu.removeBookmark),
+            ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, ''),
+            child: Text(t.common.cancel),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, controller.text),
+            child: Text(t.common.done),
+          ),
+        ],
+      ),
+    );
+
+    if (result != null) {
+      setState(() {
+        if (result.isEmpty) {
+          page.bookmarkName = null;
+        } else {
+          page.bookmarkName = result;
+        }
+        widget.redrawAndSave();
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final platform = Theme.of(context).platform;
@@ -51,7 +103,7 @@ class _EditorPageManagerState extends State<EditorPageManager> {
     // Get list of bookmarked pages
     final bookmarkedPages = <int>[];
     for (int i = 0; i < widget.coreInfo.pages.length; i++) {
-      if (widget.coreInfo.pages[i].isBookmarked) {
+      if (widget.coreInfo.pages[i].bookmarkName != null) {
         bookmarkedPages.add(i);
       }
     }
@@ -83,13 +135,15 @@ class _EditorPageManagerState extends State<EditorPageManager> {
                 itemCount: bookmarkedPages.length,
                 itemBuilder: (context, index) {
                   final pageIndex = bookmarkedPages[index];
+                  final bookmarkName =
+                      widget.coreInfo.pages[pageIndex].bookmarkName;
                   return InkWell(
                     onTap: () {
                       scrollToPage(pageIndex);
                       Navigator.of(context).pop();
                     },
                     child: Container(
-                      width: 80,
+                      width: 100,
                       padding: const EdgeInsets.all(4),
                       child: Column(
                         children: [
@@ -113,8 +167,11 @@ class _EditorPageManagerState extends State<EditorPageManager> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            '${pageIndex + 1}',
+                            bookmarkName ?? '${pageIndex + 1}',
                             style: Theme.of(context).textTheme.bodySmall,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.center,
                           ),
                         ],
                       ),
@@ -133,6 +190,8 @@ class _EditorPageManagerState extends State<EditorPageManager> {
                 final isEmptyLastPage =
                     pageIndex == widget.coreInfo.pages.length - 1 &&
                     widget.coreInfo.pages[pageIndex].isEmpty;
+                final isBookmarked =
+                    widget.coreInfo.pages[pageIndex].bookmarkName != null;
                 return InkWell(
                   key: ValueKey(pageIndex),
                   onTap: () => scrollToPage(pageIndex),
@@ -175,23 +234,15 @@ class _EditorPageManagerState extends State<EditorPageManager> {
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             IconButton(
-                              tooltip:
-                                  widget.coreInfo.pages[pageIndex].isBookmarked
-                                  ? t.editor.menu.removeBookmark
+                              tooltip: isBookmarked
+                                  ? t.editor.menu.editBookmark
                                   : t.editor.menu.addBookmark,
                               icon: Icon(
-                                widget.coreInfo.pages[pageIndex].isBookmarked
+                                isBookmarked
                                     ? Icons.bookmark
                                     : Icons.bookmark_border,
                               ),
-                              onPressed: () => setState(() {
-                                widget.coreInfo.pages[pageIndex].isBookmarked =
-                                    !widget
-                                        .coreInfo
-                                        .pages[pageIndex]
-                                        .isBookmarked;
-                                widget.redrawAndSave();
-                              }),
+                              onPressed: () => _showBookmarkDialog(pageIndex),
                             ),
                             IconButton(
                               tooltip: t.editor.menu.insertPage,

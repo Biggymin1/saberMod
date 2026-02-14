@@ -54,7 +54,10 @@ class EditorPage extends ChangeNotifier implements HasSize {
 
   EditorImage? backgroundImage;
 
-  bool isBookmarked = false;
+  /// The bookmark name for this page.
+  /// Null means the page is not bookmarked.
+  /// Non-null means the page is bookmarked with that name.
+  String? bookmarkName;
 
   bool get isEmpty =>
       strokes.isEmpty &&
@@ -172,8 +175,8 @@ class EditorPage extends ChangeNotifier implements HasSize {
             )
           : null,
     );
-    // Load bookmark status from JSON (default to false if not present)
-    page.isBookmarked = json['bm'] == true;
+    // Load bookmark name from JSON (default to null if not present)
+    page.bookmarkName = json['bm'] as String?;
     return page;
   }
 
@@ -187,7 +190,7 @@ class EditorPage extends ChangeNotifier implements HasSize {
     if (!quill.controller.document.isEmpty())
       'q': quill.controller.document.toDelta().toJson(),
     if (backgroundImage != null) 'b': backgroundImage?.toJson(assets),
-    if (isBookmarked) 'bm': true,
+    if (bookmarkName != null) 'bm': bookmarkName,
   };
 
   /// Inserts a stroke, while keeping the strokes sorted by

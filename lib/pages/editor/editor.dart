@@ -1942,6 +1942,25 @@ class EditorState extends State<Editor> {
       clearPage: clearPage,
       deletePage: (int pageIndex) => setState(() {
         if (coreInfo.readOnly) return;
+        final deletedPage = coreInfo.pages[pageIndex];
+        final bookmarkName = deletedPage.bookmarkName;
+
+        // Transfer bookmark to previous page (or next if no previous)
+        if (bookmarkName != null) {
+          int? targetPageIndex;
+          if (pageIndex > 0) {
+            // Transfer to previous page
+            targetPageIndex = pageIndex - 1;
+          } else if (coreInfo.pages.length > 1) {
+            // Transfer to next page (which will become the current index after deletion)
+            targetPageIndex = 0;
+          }
+
+          if (targetPageIndex != null) {
+            coreInfo.pages[targetPageIndex].bookmarkName = bookmarkName;
+          }
+        }
+
         final page = coreInfo.pages.removeAt(pageIndex);
         createPage(pageIndex - 1);
         history.recordChange(
