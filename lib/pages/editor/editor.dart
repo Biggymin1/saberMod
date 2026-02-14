@@ -283,11 +283,17 @@ class EditorState extends State<Editor> {
     if (_ctrlShiftZ != null) Keybinder.remove(_ctrlShiftZ!);
   }
 
+  /// Whether the current file is the whiteboard
+  bool get isWhiteboard => coreInfo.filePath == Whiteboard.filePath;
+
   /// Creates pages until the given page index exists,
   /// plus an extra blank page
+  /// For whiteboard, uses a single large canvas (3000x3000)
   void createPage(int pageIndex) {
     while (pageIndex >= coreInfo.pages.length - 1) {
-      final page = EditorPage();
+      final page = isWhiteboard
+          ? EditorPage(size: EditorPage.whiteboardSize)
+          : EditorPage();
       coreInfo.pages.add(page);
       listenToQuillChanges(page.quill, coreInfo.pages.length - 1);
     }
@@ -1663,40 +1669,43 @@ class EditorState extends State<Editor> {
                   triggerSave: saveToFile,
                 ),
                 actions: [
-                  IconButton(
-                    icon: const AdaptiveIcon(
-                      icon: Icons.insert_page_break,
-                      cupertinoIcon: CupertinoIcons.add,
+                  // Hide page management buttons for whiteboard
+                  if (!isWhiteboard) ...[
+                    IconButton(
+                      icon: const AdaptiveIcon(
+                        icon: Icons.insert_page_break,
+                        cupertinoIcon: CupertinoIcons.add,
+                      ),
+                      tooltip: t.editor.menu.insertPage,
+                      onPressed: () => setState(() {
+                        final currentPageIndex = this.currentPageIndex;
+                        insertPageAfter(currentPageIndex);
+                        CanvasGestureDetector.scrollToPage(
+                          pageIndex: currentPageIndex + 1,
+                          pages: coreInfo.pages,
+                          screenWidth: MediaQuery.sizeOf(context).width,
+                          transformationController: _transformationController,
+                        );
+                      }),
                     ),
-                    tooltip: t.editor.menu.insertPage,
-                    onPressed: () => setState(() {
-                      final currentPageIndex = this.currentPageIndex;
-                      insertPageAfter(currentPageIndex);
-                      CanvasGestureDetector.scrollToPage(
-                        pageIndex: currentPageIndex + 1,
-                        pages: coreInfo.pages,
-                        screenWidth: MediaQuery.sizeOf(context).width,
-                        transformationController: _transformationController,
-                      );
-                    }),
-                  ),
-                  IconButton(
-                    icon: const AdaptiveIcon(
-                      icon: Icons.grid_view,
-                      cupertinoIcon: CupertinoIcons.rectangle_grid_2x2,
+                    IconButton(
+                      icon: const AdaptiveIcon(
+                        icon: Icons.grid_view,
+                        cupertinoIcon: CupertinoIcons.rectangle_grid_2x2,
+                      ),
+                      tooltip: t.editor.pages,
+                      onPressed: () {
+                        showDialog(
+                          context: context,
+                          builder: (context) => AdaptiveAlertDialog(
+                            title: Text(t.editor.pages),
+                            content: pageManager(context),
+                            actions: const [],
+                          ),
+                        );
+                      },
                     ),
-                    tooltip: t.editor.pages,
-                    onPressed: () {
-                      showDialog(
-                        context: context,
-                        builder: (context) => AdaptiveAlertDialog(
-                          title: Text(t.editor.pages),
-                          content: pageManager(context),
-                          actions: const [],
-                        ),
-                      );
-                    },
-                  ),
+                  ],
                   IconButton(
                     icon: const AdaptiveIcon(
                       icon: Icons.more_vert,
@@ -1930,7 +1939,10 @@ class EditorState extends State<Editor> {
 
   void insertPageAfter(int pageIndex) => setState(() {
     if (coreInfo.readOnly) return;
-    final page = EditorPage();
+    // For whiteboard, use the large canvas size (only 1 page allowed)
+    final page = isWhiteboard
+        ? EditorPage(size: EditorPage.whiteboardSize)
+        : EditorPage();
     coreInfo.pages.insert(pageIndex + 1, page);
     listenToQuillChanges(page.quill, pageIndex + 1);
     history.recordChange(
