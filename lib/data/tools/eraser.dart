@@ -19,6 +19,25 @@ class Eraser extends Tool {
   @override
   ToolId get toolId => .eraser;
 
+  /// Returns any [strokes] that overlap with the given [scribbleStroke].
+  /// This is used for the scribble-to-erase feature.
+  static List<Stroke> findStrokesToErase(
+    Stroke scribbleStroke,
+    List<Stroke> strokes,
+  ) {
+    final List<Stroke> toErase = [];
+    final sqrSize = square(
+      scribbleStroke.options.size * 2,
+    ); // Use 2x stroke size for collision
+
+    for (final stroke in strokes) {
+      if (_doesStrokeCollide(scribbleStroke, stroke, sqrSize)) {
+        toErase.add(stroke);
+      }
+    }
+    return toErase;
+  }
+
   /// Returns any [strokes] that are close to the given [eraserPos].
   List<Stroke> checkForOverlappingStrokes(
     Offset eraserPos,
@@ -40,6 +59,24 @@ class Eraser extends Tool {
     final List<Stroke> erased = _erased;
     _erased = [];
     return erased;
+  }
+
+  /// Check if [scribbleStroke] collides with [targetStroke].
+  static bool _doesStrokeCollide(
+    Stroke scribbleStroke,
+    Stroke targetStroke,
+    double sqrSize,
+  ) {
+    // Check if any point of the scribble is close to any point of the target stroke
+    for (final scribblePoint in scribbleStroke.lowQualityPolygon) {
+      for (int i = 0; i < targetStroke.lowQualityPolygon.length; i++) {
+        final targetPoint = targetStroke.lowQualityPolygon[i];
+        if (sqrDistanceBetween(scribblePoint, targetPoint) <= sqrSize) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
   static bool _shouldStrokeBeErased(

@@ -343,6 +343,58 @@ class Stroke {
     return sqrLength >= sqrMinLength;
   }
 
+  /// Detects if this stroke is a scribble (zigzag, Z, or scratch-out gesture).
+  /// Returns true if the stroke exhibits characteristics of a scribble:
+  /// - At least 5 points (to filter out accidental short strokes)
+  /// - Path length is significantly longer than straight-line distance (meandering)
+  /// - Multiple direction changes
+  bool isScribble() {
+    // Need at least 5 points to detect a scribble pattern
+    if (points.length < 5) return false;
+
+    // Calculate straight-line distance (start to end)
+    final straightLineDistance = points.first.distanceTo(points.last);
+
+    // Calculate actual path length (sum of all segments)
+    double pathLength = 0;
+    for (int i = 1; i < points.length; i++) {
+      pathLength += points[i - 1].distanceTo(points[i]);
+    }
+
+    // A scribble should have a path much longer than straight-line distance
+    // Use 2.5x threshold - if path is less than 2.5x the straight distance,
+    // it's likely a relatively straight line, not a scribble
+    if (pathLength < straightLineDistance * 2.5) return false;
+
+    // Count direction changes (zigzags)
+    int directionChanges = 0;
+    if (points.length >= 3) {
+      // Get the general direction of the first few points
+      double prevDx = points[1].dx - points[0].dx;
+      double prevDy = points[1].dy - points[0].dy;
+
+      for (int i = 2; i < points.length; i++) {
+        final dx = points[i].dx - points[i - 1].dx;
+        final dy = points[i].dy - points[i - 1].dy;
+
+        // Check if direction changed significantly (dot product < 0 means reversed)
+        final dot = prevDx * dx + prevDy * dy;
+        if (dot < 0) {
+          directionChanges++;
+          // Reset previous direction to current
+          prevDx = dx;
+          prevDy = dy;
+        }
+      }
+    }
+
+    // Need at least 3 direction changes for a scribble pattern
+    // This catches Z shapes, horizontal back-and-forth, etc.
+    if (directionChanges < 3) return false;
+
+    return true;
+  }
+
   /// Replaces the points in this stroke with a straight line.
   ///
   /// If the resulting line is close to horizontal or vertical,
