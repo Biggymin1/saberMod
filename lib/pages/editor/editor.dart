@@ -651,6 +651,37 @@ class EditorState extends State<Editor> {
           newStroke.convertToLine();
         }
 
+        // Check if the stroke is a scribble (for scribble-to-erase feature)
+        if (newStroke.isScribble()) {
+          // Find strokes that collide with the scribble
+          final strokesToErase = Eraser.findStrokesToErase(
+            newStroke,
+            page.strokes,
+          );
+
+          if (strokesToErase.isNotEmpty) {
+            // Remove the scribble stroke and all colliding strokes
+            for (final stroke in strokesToErase) {
+              page.strokes.remove(stroke);
+            }
+
+            // Record as an erase action in history for undo support
+            history.recordChange(
+              EditorHistoryItem(
+                type: .erase,
+                pageIndex: dragPageIndex!,
+                strokes: strokesToErase,
+                images: [],
+              ),
+            );
+
+            // Don't add the scribble as a stroke - it was used to erase
+            shouldSave = true;
+            autosaveAfterDelay();
+            return;
+          }
+        }
+
         createPage(newStroke.pageIndex);
         page.insertStroke(newStroke);
         history.recordChange(
