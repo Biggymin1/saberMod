@@ -34,7 +34,8 @@ enum ToolId {
   eraser('Eraser'),
   select('Select'),
   textEditing('TextEditingTool'),
-  laserPointer('LaserPointer');
+  laserPointer('LaserPointer'),
+  link('Link');
 
   final String id;
   const ToolId(this.id);
