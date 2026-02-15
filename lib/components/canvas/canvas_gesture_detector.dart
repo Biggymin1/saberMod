@@ -159,6 +159,13 @@ class CanvasGestureDetectorState extends State<CanvasGestureDetector> {
   /// Otherwise, panning can be done in any (i.e. diagonal) direction.
   late bool axisAlignedPanLock = stows.lastAxisAlignedPanLock.value;
 
+  /// Tracks the number of pointers currently on screen
+  int _pointerCount = 0;
+
+  /// Timer for two-finger double-tap detection
+  DateTime? _lastTwoFingerTapTime;
+  static const _twoFingerDoubleTapDuration = Duration(milliseconds: 400);
+
   void zoomIn() => widget._transformationController.value =
       setZoom(
         scaleDelta: 0.1,
@@ -441,6 +448,15 @@ class CanvasGestureDetectorState extends State<CanvasGestureDetector> {
         !stows.hideFingerDrawingToggle.value) {
       stows.editorFingerDrawing.value = false;
     }
+
+    // Track pointer count for two-finger double-tap detection
+    if (event is PointerDownEvent) {
+      _pointerCount++;
+      // Only check for double-tap when we have exactly 2 fingers
+      if (_pointerCount == 2) {
+        _checkTwoFingerDoubleTap();
+      }
+    }
   }
 
   var stylusButtonWasPressed = false;
@@ -465,6 +481,27 @@ class CanvasGestureDetectorState extends State<CanvasGestureDetector> {
     widget.updatePointerData(event.kind, null);
     stylusButtonWasPressed = false;
     widget.onStylusButtonChanged(false);
+
+    // Track pointer count for two-finger double-tap detection
+    if (_pointerCount > 0) {
+      _pointerCount--;
+    }
+  }
+
+  /// Checks for two-finger double-tap gesture and triggers undo
+  void _checkTwoFingerDoubleTap() {
+    if (_pointerCount == 2) {
+      final now = DateTime.now();
+      if (_lastTwoFingerTapTime != null &&
+          now.difference(_lastTwoFingerTapTime!) <
+              _twoFingerDoubleTapDuration) {
+        // Double-tap detected with 2 fingers - trigger undo
+        widget.undo();
+        _lastTwoFingerTapTime = null;
+      } else {
+        _lastTwoFingerTapTime = now;
+      }
+    }
   }
 
   @override

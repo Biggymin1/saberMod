@@ -692,7 +692,6 @@ class EditorState extends State<Editor> {
           newStroke.convertToLine();
         }
 
-<<<<<<< HEAD
         // Check if the stroke is a scribble (for scribble-to-erase feature)
         if (newStroke.isScribble()) {
           // Find strokes that collide with the scribble
@@ -725,12 +724,10 @@ class EditorState extends State<Editor> {
         }
 
         createPage(newStroke.pageIndex);
-=======
         // Don't create new pages for whiteboard - only allow single page
         if (!isWhiteboard) {
           createPage(newStroke.pageIndex);
         }
->>>>>>> task-a
         page.insertStroke(newStroke);
         history.recordChange(
           EditorHistoryItem(
