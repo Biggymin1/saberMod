@@ -362,9 +362,9 @@ class Stroke {
     }
 
     // A scribble should have a path much longer than straight-line distance
-    // Use 4x threshold - if path is less than 4x the straight distance,
+    // Use 6x threshold - if path is less than 6x the straight distance,
     // it's likely a relatively straight line or letter, not a scribble
-    if (pathLength < straightLineDistance * 4) return false;
+    if (pathLength < straightLineDistance * 6) return false;
 
     // Count direction changes (zigzags)
     int directionChanges = 0;
@@ -388,9 +388,11 @@ class Stroke {
       }
     }
 
-    // Need at least 5 direction changes for a scribble pattern
+    // Need at least 8 direction changes for a scribble pattern
     // This catches Z shapes, horizontal back-and-forth, etc.
-    if (directionChanges < 5) return false;
+    // Using 8 instead of 5 prevents letters like H and A from being
+    // incorrectly detected as scribbles
+    if (directionChanges < 8) return false;
 
     return true;
   }
