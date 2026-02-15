@@ -59,6 +59,11 @@ class EditorPage extends ChangeNotifier implements HasSize {
 
   EditorImage? backgroundImage;
 
+  /// The bookmark name for this page.
+  /// Null means the page is not bookmarked.
+  /// Non-null means the page is bookmarked with that name.
+  String? bookmarkName;
+
   bool get isEmpty =>
       strokes.isEmpty &&
       images.isEmpty &&
@@ -140,7 +145,7 @@ class EditorPage extends ChangeNotifier implements HasSize {
     required AssetCache assetCache,
   }) {
     final size = Size(json['w'] ?? defaultWidth, json['h'] ?? defaultHeight);
-    return EditorPage(
+    final page = EditorPage(
       size: size,
       strokes: parseStrokesJson(
         json['s'] as List?,
@@ -175,6 +180,9 @@ class EditorPage extends ChangeNotifier implements HasSize {
             )
           : null,
     );
+    // Load bookmark name from JSON (default to null if not present)
+    page.bookmarkName = json['bm'] as String?;
+    return page;
   }
 
   Map<String, dynamic> toJson(OrderedAssetCache assets) => {
@@ -187,6 +195,7 @@ class EditorPage extends ChangeNotifier implements HasSize {
     if (!quill.controller.document.isEmpty())
       'q': quill.controller.document.toDelta().toJson(),
     if (backgroundImage != null) 'b': backgroundImage?.toJson(assets),
+    if (bookmarkName != null) 'bm': bookmarkName,
   };
 
   /// Inserts a stroke, while keeping the strokes sorted by

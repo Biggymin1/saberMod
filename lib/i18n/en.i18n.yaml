@@ -322,6 +322,13 @@ editor:
     insertPage: Insert page below
     duplicatePage: Duplicate page
     deletePage: Delete page
+    addBookmark: Bookmark page
+    removeBookmark: Remove bookmark
+    bookmarks: Bookmarks
+    setBookmarkName: Set bookmark name
+    bookmarkName: Bookmark name
+    editBookmark: Edit bookmark
+    bookmarkNameHint: Enter a name for this bookmark (e.g., "Ochem tutorial")
     lineHeight: Line height
     lineHeightDescription: Also controls the text size for typed notes
     lineThickness: Line thickness
