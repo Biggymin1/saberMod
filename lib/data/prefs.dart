@@ -142,7 +142,7 @@ class Stows {
   );
   final editorAutoInvert = PlainStow(
     'editorAutoInvert',
-    true,
+    false,
     volatile: !_isOnMainIsolate,
   );
   final preferGreyscale = PlainStow(
