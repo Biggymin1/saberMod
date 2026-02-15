@@ -993,6 +993,9 @@ class TranslationsEditorToolbarEn {
 	/// en: 'Toggle eraser (Ctrl E)'
 	String get toggleEraser => 'Toggle eraser (Ctrl E)';
 
+	/// en: 'Link'
+	String get link => 'Link';
+
 	/// en: 'Images'
 	String get photo => 'Images';
 
