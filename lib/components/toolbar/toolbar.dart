@@ -23,6 +23,7 @@ import 'package:saber/data/tools/_tool.dart';
 import 'package:saber/data/tools/eraser.dart';
 import 'package:saber/data/tools/highlighter.dart';
 import 'package:saber/data/tools/laser_pointer.dart';
+import 'package:saber/data/tools/link.dart';
 import 'package:saber/data/tools/pen.dart';
 import 'package:saber/data/tools/pencil.dart';
 import 'package:saber/data/tools/select.dart';
@@ -454,6 +455,17 @@ class _ToolbarState extends State<Toolbar> {
                 onPressed: toggleEraser,
                 padding: buttonPadding,
                 child: const FaIcon(FontAwesomeIcons.eraser, size: 16),
+              ),
+              ToolbarIconButton(
+                tooltip: t.editor.toolbar.link,
+                selected: widget.currentTool is Link,
+                enabled: !widget.readOnly,
+                onPressed: () {
+                  toolOptionsType.value = .hide;
+                  widget.setTool(Link.currentLink);
+                },
+                padding: buttonPadding,
+                child: FaIcon(Link.linkIcon, size: 16),
               ),
               ToolbarIconButton(
                 tooltip: t.editor.toolbar.photo,

@@ -262,6 +262,7 @@ editor:
     toggleColors: Toggle colors (Ctrl C)
     select: Select
     toggleEraser: Toggle eraser (Ctrl E)
+    link: Link
     photo: Images
     text: Text
     toggleFingerDrawing: Toggle finger drawing (Ctrl F)

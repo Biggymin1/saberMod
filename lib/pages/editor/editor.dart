@@ -43,6 +43,7 @@ import 'package:saber/data/tools/_tool.dart';
 import 'package:saber/data/tools/eraser.dart';
 import 'package:saber/data/tools/highlighter.dart';
 import 'package:saber/data/tools/laser_pointer.dart';
+import 'package:saber/data/tools/link.dart';
 import 'package:saber/data/tools/pen.dart';
 import 'package:saber/data/tools/pencil.dart';
 import 'package:saber/data/tools/select.dart';
@@ -151,6 +152,8 @@ class EditorState extends State<Editor> {
         return Tool.textEditing;
       case .laserPointer:
         return LaserPointer.currentLaserPointer;
+      case .link:
+        return Link.currentLink;
     }
   }();
   Tool get currentTool => _currentTool;
@@ -625,6 +628,8 @@ class EditorState extends State<Editor> {
       }
     } else if (currentTool is LaserPointer) {
       (currentTool as LaserPointer).onDragStart(position, page, dragPageIndex!);
+    } else if (currentTool is Link) {
+      (currentTool as Link).onDragStart(position, page, dragPageIndex!);
     }
 
     previousPosition = position;
@@ -671,6 +676,9 @@ class EditorState extends State<Editor> {
       page.redrawStrokes();
     } else if (currentTool is LaserPointer) {
       (currentTool as LaserPointer).onDragUpdate(position);
+      page.redrawStrokes();
+    } else if (currentTool is Link) {
+      (currentTool as Link).onDragUpdate(position);
       page.redrawStrokes();
     }
     previousPosition = position;
@@ -790,6 +798,21 @@ class EditorState extends State<Editor> {
           },
         );
         if (newStroke != null) page.laserStrokes.add(newStroke);
+      } else if (currentTool is Link) {
+        shouldSave = false;
+        final newStroke = (currentTool as Link).onDragEnd();
+        if (newStroke != null) {
+          page.insertStroke(newStroke);
+          history.recordChange(
+            EditorHistoryItem(
+              type: .draw,
+              pageIndex: dragPageIndex!,
+              strokes: [newStroke],
+              images: [],
+            ),
+          );
+          autosaveAfterDelay();
+        }
       }
     });
 
