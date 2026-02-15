@@ -314,12 +314,21 @@ class EditorState extends State<Editor> {
 
   /// Creates pages until the given page index exists,
   /// plus an extra blank page
-  /// For whiteboard, uses a single large canvas (3000x3000)
+  /// For whiteboard, only allows a single page (no additional pages)
   void createPage(int pageIndex) {
+    // For whiteboard, don't create additional pages - only allow single page
+    if (isWhiteboard) {
+      // If requesting page 0 and we have at least 1 page, do nothing
+      // If requesting page beyond 0, cap it at 0
+      if (coreInfo.pages.isEmpty) {
+        coreInfo.pages.add(EditorPage(size: EditorPage.whiteboardSize));
+        listenToQuillChanges(coreInfo.pages[0].quill, 0);
+      }
+      return;
+    }
+
     while (pageIndex >= coreInfo.pages.length - 1) {
-      final page = isWhiteboard
-          ? EditorPage(size: EditorPage.whiteboardSize)
-          : EditorPage();
+      final page = EditorPage();
       coreInfo.pages.add(page);
       listenToQuillChanges(page.quill, coreInfo.pages.length - 1);
     }
@@ -683,6 +692,7 @@ class EditorState extends State<Editor> {
           newStroke.convertToLine();
         }
 
+<<<<<<< HEAD
         // Check if the stroke is a scribble (for scribble-to-erase feature)
         if (newStroke.isScribble()) {
           // Find strokes that collide with the scribble
@@ -715,6 +725,12 @@ class EditorState extends State<Editor> {
         }
 
         createPage(newStroke.pageIndex);
+=======
+        // Don't create new pages for whiteboard - only allow single page
+        if (!isWhiteboard) {
+          createPage(newStroke.pageIndex);
+        }
+>>>>>>> task-a
         page.insertStroke(newStroke);
         history.recordChange(
           EditorHistoryItem(
@@ -863,7 +879,10 @@ class EditorState extends State<Editor> {
         pageIndex: pageIndex,
         event: event,
       );
-      createPage(pageIndex); // create empty last page
+      // Don't create new pages for whiteboard - only allow single page
+      if (!isWhiteboard) {
+        createPage(pageIndex); // create empty last page
+      }
       if (undoRedoButtonsNeedUpdating) {
         setState(() {});
       }
