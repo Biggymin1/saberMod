@@ -83,16 +83,14 @@ class _EditorPageManagerState extends State<EditorPageManager> {
       ),
     );
 
-    if (result != null) {
-      setState(() {
-        if (result.isEmpty) {
-          page.bookmarkName = null;
-        } else {
-          page.bookmarkName = result;
-        }
-        widget.redrawAndSave();
-      });
-    }
+    setState(() {
+      if (result == null || result.isEmpty) {
+        page.bookmarkName = null;
+      } else {
+        page.bookmarkName = result;
+      }
+      widget.redrawAndSave();
+    });
   }
 
   @override
