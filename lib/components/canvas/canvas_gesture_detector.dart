@@ -166,6 +166,9 @@ class CanvasGestureDetectorState extends State<CanvasGestureDetector> {
   DateTime? _lastTwoFingerTapTime;
   static const _twoFingerDoubleTapDuration = Duration(milliseconds: 400);
 
+  /// Timer to reset pointer count if it gets stuck
+  Timer? _pointerCountResetTimer;
+
   void zoomIn() => widget._transformationController.value =
       setZoom(
         scaleDelta: 0.1,
@@ -452,6 +455,8 @@ class CanvasGestureDetectorState extends State<CanvasGestureDetector> {
     // Track pointer count for two-finger double-tap detection
     if (event is PointerDownEvent) {
       _pointerCount++;
+      // Cancel any pending reset timer since we have active pointers
+      _pointerCountResetTimer?.cancel();
       // Only check for double-tap when we have exactly 2 fingers
       if (_pointerCount == 2) {
         _checkTwoFingerDoubleTap();
@@ -486,6 +491,40 @@ class CanvasGestureDetectorState extends State<CanvasGestureDetector> {
     if (_pointerCount > 0) {
       _pointerCount--;
     }
+
+    // If all pointers are lifted, schedule a safety reset to prevent stuck state
+    if (_pointerCount == 0) {
+      _schedulePointerCountReset();
+    } else {
+      // Cancel any pending reset since we still have active pointers
+      _pointerCountResetTimer?.cancel();
+    }
+  }
+
+  /// Handles pointer cancel events (e.g., when gesture is interrupted)
+  void _listenerPointerCancelEvent(PointerEvent event) {
+    widget.updatePointerData(event.kind, null);
+    stylusButtonWasPressed = false;
+    widget.onStylusButtonChanged(false);
+
+    // Reset pointer count when a pointer is cancelled
+    // This prevents the count from getting stuck
+    _pointerCount = 0;
+    _lastTwoFingerTapTime = null;
+  }
+
+  /// Schedules a safety reset of the pointer count after a timeout.
+  /// This handles edge cases where pointer events don't fire correctly.
+  void _schedulePointerCountReset() {
+    _pointerCountResetTimer?.cancel();
+    _pointerCountResetTimer = Timer(const Duration(milliseconds: 500), () {
+      // Safety reset: if count is non-zero after timeout, reset it
+      // This handles cases where pointer events are lost
+      if (_pointerCount != 0) {
+        _pointerCount = 0;
+        _lastTwoFingerTapTime = null;
+      }
+    });
   }
 
   /// Checks for two-finger double-tap gesture and triggers undo
@@ -514,6 +553,7 @@ class CanvasGestureDetectorState extends State<CanvasGestureDetector> {
           onPointerDown: _listenerPointerEvent,
           onPointerMove: _listenerPointerEvent,
           onPointerUp: _listenerPointerUpEvent,
+          onPointerCancel: _listenerPointerCancelEvent,
           onPointerHover: _listenerPointerHoverEvent,
           child: GestureDetector(
             child: LayoutBuilder(
@@ -594,6 +634,7 @@ class CanvasGestureDetectorState extends State<CanvasGestureDetector> {
     widget._transformationController.removeListener(onTransformChanged);
     widget._transformationController.dispose();
     _removeKeybindings();
+    _pointerCountResetTimer?.cancel();
     super.dispose();
   }
 
