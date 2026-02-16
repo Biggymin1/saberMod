@@ -174,7 +174,20 @@ class CanvasPainter extends CustomPainter {
     }
 
     // Current stroke always uses high quality
-    canvas.drawPath(currentStroke!.highQualityPath, paint);
+    if (currentStroke is RectangleStroke) {
+      final strokeSize = currentStroke!.options.size;
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          (currentStroke as RectangleStroke).rect,
+          Radius.circular(strokeSize / 4),
+        ),
+        paint
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = strokeSize,
+      );
+    } else {
+      canvas.drawPath(currentStroke!.highQualityPath, paint);
+    }
   }
 
   void _drawLaserStroke(Canvas canvas, LaserStroke stroke) {
