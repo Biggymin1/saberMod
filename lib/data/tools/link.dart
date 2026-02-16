@@ -7,7 +7,7 @@ import 'package:saber/data/editor/page.dart';
 import 'package:saber/data/tools/_tool.dart';
 
 class Link extends Tool {
-  Link._();
+  Link._() : color = defaultColor;
 
   static final _currentLink = Link._();
   static Link get currentLink => _currentLink;

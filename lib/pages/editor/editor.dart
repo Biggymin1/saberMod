@@ -809,7 +809,7 @@ class EditorState extends State<Editor> {
           ).then((pageNumber) {
             if (pageNumber != null) {
               setState(() {
-                newStroke.linkTargetPageIndex = pageNumber;
+                newStroke.linkTargetPageIndex = pageNumber - 1;
                 page.insertStroke(newStroke);
                 history.recordChange(
                   EditorHistoryItem(
@@ -1927,8 +1927,12 @@ class EditorState extends State<Editor> {
 
   Widget pageBuilder(BuildContext context, int pageIndex) {
     final page = coreInfo.pages[pageIndex];
-    final currentStroke = Pen.currentStroke?.pageIndex == pageIndex
+    final currentStroke =
+        (currentTool is Pen && Pen.currentStroke?.pageIndex == pageIndex)
         ? Pen.currentStroke
+        : (currentTool is Link &&
+              (currentTool as Link).currentStroke?.pageIndex == pageIndex)
+        ? (currentTool as Link).currentStroke
         : null;
     return Canvas(
       path: coreInfo.filePath,
