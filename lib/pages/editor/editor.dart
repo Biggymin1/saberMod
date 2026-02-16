@@ -28,6 +28,7 @@ import 'package:saber/components/theming/saber_theme.dart';
 import 'package:saber/components/toolbar/color_bar.dart';
 import 'package:saber/components/toolbar/editor_bottom_sheet.dart';
 import 'package:saber/components/toolbar/editor_page_manager.dart';
+import 'package:saber/components/toolbar/link_dialog.dart';
 import 'package:saber/components/toolbar/toolbar.dart';
 import 'package:saber/data/editor/_color_change.dart';
 import 'package:saber/data/editor/editor_core_info.dart';
@@ -802,16 +803,26 @@ class EditorState extends State<Editor> {
         shouldSave = false;
         final newStroke = (currentTool as Link).onDragEnd();
         if (newStroke != null) {
-          page.insertStroke(newStroke);
-          history.recordChange(
-            EditorHistoryItem(
-              type: .draw,
-              pageIndex: dragPageIndex!,
-              strokes: [newStroke],
-              images: [],
-            ),
-          );
-          autosaveAfterDelay();
+          showDialog<int>(
+            context: context,
+            builder: (context) => const LinkDialog(),
+          ).then((pageNumber) {
+            if (pageNumber != null) {
+              setState(() {
+                newStroke.linkTargetPageIndex = pageNumber;
+                page.insertStroke(newStroke);
+                history.recordChange(
+                  EditorHistoryItem(
+                    type: .draw,
+                    pageIndex: dragPageIndex!,
+                    strokes: [newStroke],
+                    images: [],
+                  ),
+                );
+                autosaveAfterDelay();
+              });
+            }
+          });
         }
       }
     });

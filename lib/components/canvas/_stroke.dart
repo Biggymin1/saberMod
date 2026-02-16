@@ -33,6 +33,7 @@ class Stroke {
   Color color;
   bool pressureEnabled;
   final StrokeOptions options;
+  int? linkTargetPageIndex;
 
   List<Offset>? _lowQualityPolygon, _highQualityPolygon;
   List<Offset> get lowQualityPolygon =>
@@ -69,6 +70,7 @@ class Stroke {
     required this.pageIndex,
     required this.page,
     required this.toolId,
+    this.linkTargetPageIndex,
   });
 
   factory Stroke.fromJson(
@@ -148,11 +150,13 @@ class Stroke {
       pageIndex: pageIndex,
       page: page,
       toolId: toolId,
+      linkTargetPageIndex: json['linkTargetPageIndex'],
     )..points.addAll(points);
   }
   Map<String, dynamic> toJson() {
     // these json keys should not be the same as the ones in [StrokeOptions.toJson]
     return {
+      'linkTargetPageIndex': linkTargetPageIndex,
       'shape': null,
       'p': points
           .where((point) => point.isFinite)

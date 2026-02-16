@@ -556,6 +556,31 @@ class CanvasGestureDetectorState extends State<CanvasGestureDetector> {
           onPointerCancel: _listenerPointerCancelEvent,
           onPointerHover: _listenerPointerHoverEvent,
           child: GestureDetector(
+            onTapUp: (details) {
+              for (final page in widget.pages) {
+                if (page.renderBox == null) continue;
+                final position = page.renderBox!.globalToLocal(
+                  details.globalPosition,
+                );
+                for (final stroke in page.strokes) {
+                  if (stroke.linkTargetPageIndex != null &&
+                      stroke.highQualityPolygon.isNotEmpty) {
+                    final path = Path()
+                      ..addPolygon(stroke.highQualityPolygon, true);
+                    if (path.contains(position)) {
+                      CanvasGestureDetector.scrollToPage(
+                        pageIndex: stroke.linkTargetPageIndex!,
+                        pages: widget.pages,
+                        screenWidth: MediaQuery.sizeOf(context).width,
+                        transformationController:
+                            widget._transformationController,
+                      );
+                      return;
+                    }
+                  }
+                }
+              }
+            },
             child: LayoutBuilder(
               builder: (BuildContext context, BoxConstraints containerBounds) {
                 this.containerBounds = containerBounds;
