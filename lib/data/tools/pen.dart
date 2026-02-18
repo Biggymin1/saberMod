@@ -63,6 +63,11 @@ class Pen extends Tool {
   bool pressureEnabled;
   StrokeOptions options;
 
+  /// The last recorded stylus position and pressure, used to pad
+  /// single-point (dot) strokes so [perfect_freehand] can render them.
+  Offset? _lastPosition;
+  double? _lastPressure;
+
   static var _currentPen = Pen.fountainPen();
   static Pen get currentPen => _currentPen;
   static set currentPen(Pen currentPen) {
@@ -92,6 +97,8 @@ class Pen extends Tool {
   }
 
   void onDragUpdate(Offset position, double? pressure) {
+    _lastPosition = position;
+    _lastPressure = pressure;
     currentStroke?.addPoint(position, pressure);
   }
 
@@ -99,6 +106,17 @@ class Pen extends Tool {
     final stroke = currentStroke;
     currentStroke = null;
     if (stroke == null) return null;
+
+    // A dot (stylus tap with no movement) may have only 1 point.
+    // perfect_freehand needs multiple coincident points to render
+    // a visible circle, so duplicate the last point as needed.
+    if (stroke.length <= 1 && _lastPosition != null) {
+      stroke.addPoint(_lastPosition!, _lastPressure);
+      stroke.addPoint(_lastPosition!, _lastPressure);
+    }
+
+    _lastPosition = null;
+    _lastPressure = null;
 
     return stroke
       ..options.isComplete = true

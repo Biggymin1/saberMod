@@ -1464,6 +1464,10 @@ class EditorState extends State<Editor> {
       key: _canvasGestureDetectorKey,
       filePath: coreInfo.filePath,
       isDrawGesture: isDrawGesture,
+      // Pen/Pencil support zero-latency direct drawing via raw pointer events.
+      // Pencil is a subclass of Pen, so this covers both.
+      // Link and other tools continue to use the GestureDetector path.
+      isInstantDrawTool: () => currentTool is Pen,
       onInteractionEnd: onInteractionEnd,
       onDrawStart: onDrawStart,
       onDrawUpdate: onDrawUpdate,

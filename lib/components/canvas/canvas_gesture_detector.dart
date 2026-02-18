@@ -21,6 +21,7 @@ class CanvasGestureDetector extends StatefulWidget {
     super.key,
     required this.filePath,
     required this.isDrawGesture,
+    required this.isInstantDrawTool,
     this.onInteractionEnd,
     required this.onDrawStart,
     required this.onDrawUpdate,
@@ -43,6 +44,12 @@ class CanvasGestureDetector extends StatefulWidget {
   final String filePath;
 
   final bool Function(ScaleStartDetails scaleDetails) isDrawGesture;
+
+  /// Returns true if the current tool supports instant (zero-latency) drawing
+  /// via raw pointer events, bypassing the gesture arena.
+  /// Should return true for Pen/Pencil, false for Link etc.
+  final bool Function() isInstantDrawTool;
+
   final ValueChanged<ScaleEndDetails>? onInteractionEnd;
   final ValueChanged<ScaleStartDetails> onDrawStart;
   final ValueChanged<ScaleUpdateDetails> onDrawUpdate;
@@ -168,6 +175,15 @@ class CanvasGestureDetectorState extends State<CanvasGestureDetector> {
 
   /// Timer to reset pointer count if it gets stuck
   Timer? _pointerCountResetTimer;
+
+  /// The pointer ID of a stylus stroke being drawn via the direct (zero-latency)
+  /// Listener path, bypassing the GestureDetector gesture arena.
+  /// Null when no direct draw is in progress.
+  int? _directStylusPointer;
+
+  /// The last known position of the direct-draw stylus pointer, used to
+  /// compute [ScaleUpdateDetails.focalPointDelta].
+  var _directStylusLastPosition = Offset.zero;
 
   void zoomIn() => widget._transformationController.value =
       setZoom(
@@ -457,10 +473,54 @@ class CanvasGestureDetectorState extends State<CanvasGestureDetector> {
       _pointerCount++;
       // Cancel any pending reset timer since we have active pointers
       _pointerCountResetTimer?.cancel();
-      // Only check for double-tap when we have exactly 2 fingers
-      if (_pointerCount == 2) {
+
+      // If a second pointer arrives during a direct stylus draw, end the stroke
+      // so the GestureDetector can handle the two-finger gesture (pinch/pan).
+      if (_pointerCount == 2 && _directStylusPointer != null) {
+        _endDirectStylusDraw();
+      } else if (_pointerCount == 2) {
+        // Only check for double-tap when we have exactly 2 fingers
         _checkTwoFingerDoubleTap();
       }
+
+      // --- Zero-latency direct stylus draw ---
+      // For Pen/Pencil tools, bypass the GestureDetector gesture arena entirely
+      // and start drawing immediately on the raw PointerDown event.
+      if (isStylus &&
+          _directStylusPointer == null &&
+          _pointerCount == 1 &&
+          widget.isInstantDrawTool()) {
+        final syntheticStart = ScaleStartDetails(
+          focalPoint: event.position,
+          localFocalPoint: event.localPosition,
+          pointerCount: 1,
+        );
+        // Call isDrawGesture to let EditorState set dragPageIndex and run its
+        // other checks (readOnly, textEditing, etc.) before we commit to drawing.
+        if (widget.isDrawGesture(syntheticStart)) {
+          // Use setState so the widget rebuilds with panEnabled=false
+          // before the GestureDetector's pan recognizer can fire.
+          setState(() {
+            _directStylusPointer = event.pointer;
+          });
+          _directStylusLastPosition = event.position;
+          widget.onDrawStart(syntheticStart);
+        }
+      }
+    } else if (event is PointerMoveEvent &&
+        event.pointer == _directStylusPointer) {
+      // Continue the direct-draw stroke with every raw move event.
+      final delta = event.position - _directStylusLastPosition;
+      widget.onDrawUpdate(
+        ScaleUpdateDetails(
+          focalPoint: event.position,
+          localFocalPoint: event.localPosition,
+          scale: 1.0,
+          focalPointDelta: delta,
+          pointerCount: 1,
+        ),
+      );
+      _directStylusLastPosition = event.position;
     }
   }
 
@@ -482,10 +542,26 @@ class CanvasGestureDetectorState extends State<CanvasGestureDetector> {
     }
   }
 
+  /// Ends an in-progress direct stylus draw, firing [onDrawEnd].
+  /// Also calls [setState] so [panEnabled] is restored to true on the
+  /// next build, allowing normal panning to resume.
+  void _endDirectStylusDraw() {
+    if (_directStylusPointer == null) return;
+    setState(() {
+      _directStylusPointer = null;
+    });
+    widget.onDrawEnd(ScaleEndDetails(velocity: Velocity.zero, pointerCount: 0));
+  }
+
   void _listenerPointerUpEvent(PointerEvent event) {
     widget.updatePointerData(event.kind, null);
     stylusButtonWasPressed = false;
     widget.onStylusButtonChanged(false);
+
+    // End any in-progress direct stylus draw for this pointer.
+    if (event.pointer == _directStylusPointer) {
+      _endDirectStylusDraw();
+    }
 
     // Track pointer count for two-finger double-tap detection
     if (_pointerCount > 0) {
@@ -506,6 +582,9 @@ class CanvasGestureDetectorState extends State<CanvasGestureDetector> {
     widget.updatePointerData(event.kind, null);
     stylusButtonWasPressed = false;
     widget.onStylusButtonChanged(false);
+
+    // End any in-progress direct stylus draw.
+    _endDirectStylusDraw();
 
     // Reset pointer count when a pointer is cancelled
     // This prevents the count from getting stuck
@@ -588,7 +667,11 @@ class CanvasGestureDetectorState extends State<CanvasGestureDetector> {
                 return InteractiveCanvasViewer.builder(
                   minScale: zoomLockedValue ?? CanvasGestureDetector.kMinScale,
                   maxScale: zoomLockedValue ?? CanvasGestureDetector.kMaxScale,
-                  panEnabled: !singleFingerPanLock,
+                  // Disable single-finger panning while a direct stylus draw
+                  // is active so the GestureDetector doesn't also scroll the
+                  // canvas while we draw.
+                  panEnabled:
+                      !singleFingerPanLock && _directStylusPointer == null,
                   panAxis: axisAlignedPanLock ? PanAxis.aligned : PanAxis.free,
 
                   interactionEndFrictionCoefficient:
@@ -603,7 +686,13 @@ class CanvasGestureDetectorState extends State<CanvasGestureDetector> {
 
                   transformationController: widget._transformationController,
 
-                  isDrawGesture: widget.isDrawGesture,
+                  // When a direct stylus draw is already in progress via the
+                  // Listener path, tell the GestureDetector NOT to start its
+                  // own draw gesture, preventing double-firing.
+                  isDrawGesture: (details) {
+                    if (_directStylusPointer != null) return false;
+                    return widget.isDrawGesture(details);
+                  },
                   onInteractionEnd: widget.onInteractionEnd,
                   onDrawStart: widget.onDrawStart,
                   onDrawUpdate: widget.onDrawUpdate,

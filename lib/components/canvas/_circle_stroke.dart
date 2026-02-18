@@ -56,12 +56,13 @@ class CircleStroke extends Stroke {
       toolId: .parsePenType(json['ty'], fallback: .shapePen),
       center: Offset(json['cx'] ?? 0, json['cy'] ?? 0),
       radius: json['r'] ?? 0,
-    );
+    )..linkTargetPageIndex = json['linkTargetPageIndex'];
   }
   @override
   Map<String, dynamic> toJson() {
     return {
       'shape': 'circle',
+      'linkTargetPageIndex': linkTargetPageIndex,
       'i': pageIndex,
       'cx': center.dx,
       'cy': center.dy,
@@ -150,5 +151,5 @@ class CircleStroke extends Stroke {
     toolId: toolId,
     center: center,
     radius: radius,
-  );
+  )..linkTargetPageIndex = linkTargetPageIndex;
 }

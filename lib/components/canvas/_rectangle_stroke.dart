@@ -56,12 +56,13 @@ class RectangleStroke extends Stroke {
         json['rw'] ?? 0,
         json['rh'] ?? 0,
       ),
-    );
+    )..linkTargetPageIndex = json['linkTargetPageIndex'];
   }
   @override
   Map<String, dynamic> toJson() {
     return {
       'shape': 'rect',
+      'linkTargetPageIndex': linkTargetPageIndex,
       'i': pageIndex,
       'rl': rect.left,
       'rt': rect.top,
@@ -161,5 +162,5 @@ class RectangleStroke extends Stroke {
     page: page,
     toolId: toolId,
     rect: rect,
-  );
+  )..linkTargetPageIndex = linkTargetPageIndex;
 }
