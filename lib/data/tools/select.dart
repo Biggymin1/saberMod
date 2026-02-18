@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:saber/components/canvas/_stroke.dart';
 import 'package:saber/components/canvas/image/editor_image.dart';
@@ -136,6 +138,80 @@ class SelectResult {
 
   bool get isEmpty {
     return strokes.isEmpty && images.isEmpty;
+  }
+
+  /// The axis-aligned bounding rect that contains all selected strokes and images.
+  Rect get boundingRect {
+    double left = double.infinity,
+        top = double.infinity,
+        right = double.negativeInfinity,
+        bottom = double.negativeInfinity;
+
+    for (final stroke in strokes) {
+      for (final point in stroke.lowQualityPolygon) {
+        if (point.dx < left) left = point.dx;
+        if (point.dy < top) top = point.dy;
+        if (point.dx > right) right = point.dx;
+        if (point.dy > bottom) bottom = point.dy;
+      }
+    }
+    for (final image in images) {
+      if (image.dstRect.left < left) left = image.dstRect.left;
+      if (image.dstRect.top < top) top = image.dstRect.top;
+      if (image.dstRect.right > right) right = image.dstRect.right;
+      if (image.dstRect.bottom > bottom) bottom = image.dstRect.bottom;
+    }
+
+    if (left == double.infinity) return Rect.zero;
+    return Rect.fromLTRB(left, top, right, bottom);
+  }
+
+  /// The visual size of each handle square in canvas-space units.
+  /// Pass [currentScale] (the canvas zoom level) to keep handles a fixed
+  /// screen-pixel size regardless of zoom.
+  static double handleSize(double currentScale) =>
+      max(8.0, 20.0 / currentScale);
+
+  /// Returns the [Rect] for handle [index] around [bounds].
+  ///
+  /// Handle indices (8 handles):
+  /// ```
+  /// 0 --- 1 --- 2
+  /// |           |
+  /// 3           4
+  /// |           |
+  /// 5 --- 6 --- 7
+  /// ```
+  static Rect handleRectAt(int index, Rect bounds, double currentScale) {
+    final hs = handleSize(currentScale) / 2;
+    final center = switch (index) {
+      0 => bounds.topLeft,
+      1 => bounds.topCenter,
+      2 => bounds.topRight,
+      3 => Offset(bounds.left, bounds.center.dy),
+      4 => Offset(bounds.right, bounds.center.dy),
+      5 => bounds.bottomLeft,
+      6 => bounds.bottomCenter,
+      7 => bounds.bottomRight,
+      _ => bounds.center,
+    };
+    return Rect.fromCenter(center: center, width: hs * 2, height: hs * 2);
+  }
+
+  /// Returns the point that stays fixed when dragging handle [index].
+  /// This is the corner/edge diagonally opposite to the handle.
+  static Offset pinnedPointForHandle(int index, Rect bounds) {
+    return switch (index) {
+      0 => bounds.bottomRight,
+      1 => bounds.bottomCenter,
+      2 => bounds.bottomLeft,
+      3 => Offset(bounds.right, bounds.center.dy),
+      4 => Offset(bounds.left, bounds.center.dy),
+      5 => bounds.topRight,
+      6 => bounds.topCenter,
+      7 => bounds.topLeft,
+      _ => bounds.center,
+    };
   }
 
   SelectResult copyWith({

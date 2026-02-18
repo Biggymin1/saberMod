@@ -147,6 +147,7 @@ class EditorHistoryItem {
     this.page,
     this.quillChange,
     this.colorChange,
+    this.scaleBounds,
   }) : assert(
          type != .move || offset != null,
          'Offset must be provided for move',
@@ -170,6 +171,10 @@ class EditorHistoryItem {
        assert(
          type != .changeColor || colorChange?.length == strokes.length,
          'colorChange must be provided and contain each of strokes',
+       ),
+       assert(
+         type != .scale || scaleBounds != null,
+         'scaleBounds must be provided for scale',
        );
 
   final EditorHistoryItemType type;
@@ -181,6 +186,12 @@ class EditorHistoryItem {
   final DocChange? quillChange;
   final Map<Stroke, ColorChange>? colorChange;
 
+  /// For [EditorHistoryItemType.scale]:
+  /// [scaleOrigin] is the pinned corner (fixed point of the transform).
+  /// [fromBounds] is the selection bounding rect before the scale.
+  /// [toBounds] is the bounding rect after the scale.
+  final ({Offset scaleOrigin, Rect fromBounds, Rect toBounds})? scaleBounds;
+
   EditorHistoryItem copyWith({
     EditorHistoryItemType? type,
     int? pageIndex,
@@ -190,6 +201,7 @@ class EditorHistoryItem {
     EditorPage? page,
     DocChange? quillChange,
     Map<Stroke, ColorChange>? colorChange,
+    ({Offset scaleOrigin, Rect fromBounds, Rect toBounds})? scaleBounds,
   }) {
     return EditorHistoryItem(
       type: type ?? this.type,
@@ -200,6 +212,7 @@ class EditorHistoryItem {
       page: page ?? this.page,
       quillChange: quillChange ?? this.quillChange,
       colorChange: colorChange ?? this.colorChange,
+      scaleBounds: scaleBounds ?? this.scaleBounds,
     );
   }
 }
@@ -213,4 +226,5 @@ enum EditorHistoryItemType {
   quillChange,
   quillUndoneChange,
   changeColor,
+  scale,
 }

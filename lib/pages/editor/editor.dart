@@ -482,9 +482,41 @@ class EditorState extends State<Editor> {
           for (final stroke in item.strokes) {
             stroke.color = item.colorChange![stroke]!.previous;
           }
+
+        case .scale:
+          // Undo: apply the inverse transform (toBounds → fromBounds)
+          final origin = item.scaleBounds!.scaleOrigin;
+          final sx =
+              item.scaleBounds!.fromBounds.width /
+              item.scaleBounds!.toBounds.width;
+          final sy =
+              item.scaleBounds!.fromBounds.height /
+              item.scaleBounds!.toBounds.height;
+          for (final stroke in item.strokes) {
+            stroke.scale(origin, sx, sy);
+          }
+          for (final image in item.images) {
+            image.dstRect = Rect.fromLTRB(
+              origin.dx + (image.dstRect.left - origin.dx) * sx,
+              origin.dy + (image.dstRect.top - origin.dy) * sy,
+              origin.dx + (image.dstRect.right - origin.dx) * sx,
+              origin.dy + (image.dstRect.bottom - origin.dy) * sy,
+            );
+          }
+          // Keep the selection visible after undo
+          final select = Select.currentSelect;
+          if (select.doneSelecting) {
+            final m = Matrix4.identity()
+              ..translateByDouble(origin.dx, origin.dy, 0, 1)
+              ..scaleByDouble(sx, sy, 1, 1)
+              ..translateByDouble(-origin.dx, -origin.dy, 0, 1);
+            select.selectResult.path = select.selectResult.path.transform(
+              m.storage,
+            );
+          }
       }
 
-      if (item.type != .move) {
+      if (item.type != .move && item.type != .scale) {
         Select.currentSelect.unselect();
       }
     });
@@ -528,6 +560,18 @@ class EditorState extends State<Editor> {
             ),
           ),
         );
+      case .scale:
+        // Redo: apply the forward transform (fromBounds → toBounds) by
+        // swapping fromBounds and toBounds so undo() computes the inverse-inverse.
+        undo(
+          item.copyWith(
+            scaleBounds: (
+              scaleOrigin: item.scaleBounds!.scaleOrigin,
+              fromBounds: item.scaleBounds!.toBounds,
+              toBounds: item.scaleBounds!.fromBounds,
+            ),
+          ),
+        );
     }
   }
 
@@ -550,6 +594,16 @@ class EditorState extends State<Editor> {
   /// The total offset of the current move gesture.
   /// Used to record a move in the history.
   Offset moveOffset = .zero;
+
+  /// Which of the 8 resize handles (0–7) is currently being dragged, or null.
+  int? _scaleHandleIndex;
+
+  /// The bounding rect of the selection at the start of a scale gesture.
+  Rect? _scaleFromBounds;
+
+  /// The bounding rect at the previous frame of the scale gesture,
+  /// used to compute the incremental scale factor each frame.
+  Rect? _scalePreviousBounds;
 
   var isHovering = true;
   int? dragPageIndex;
@@ -619,13 +673,44 @@ class EditorState extends State<Editor> {
       removeExcessPages();
     } else if (currentTool is Select) {
       final select = currentTool as Select;
+      // Check for a resize handle hit first (takes priority over moving/drawing)
       if (select.doneSelecting &&
           select.selectResult.pageIndex == dragPageIndex! &&
-          select.selectResult.path.contains(position)) {
-        // drag selection in onDrawUpdate
-      } else {
-        select.onDragStart(position, dragPageIndex!);
-        history.canRedo = true; // selection doesn't affect history
+          !select.selectResult.isEmpty) {
+        final bounds = select.selectResult.boundingRect;
+        final canvasScale = _transformationController.value.approxScale;
+        // Use a larger invisible hit area (~44 screen-px) while the
+        // drawn handles remain their visual size (~20 screen-px).
+        final hitPadding = 12.0 / canvasScale;
+        for (int i = 0; i < 8; i++) {
+          if (SelectResult.handleRectAt(
+            i,
+            bounds,
+            canvasScale,
+          ).inflate(hitPadding).contains(position)) {
+            _scaleHandleIndex = i;
+            _scaleFromBounds = bounds;
+            _scalePreviousBounds = bounds;
+            break;
+          }
+        }
+      }
+      if (_scaleHandleIndex == null) {
+        // No handle was hit — normal move-or-draw-lasso behavior
+        if (select.doneSelecting &&
+            select.selectResult.pageIndex == dragPageIndex! &&
+            select.selectResult.path.contains(position)) {
+          // drag selection in onDrawUpdate
+        } else {
+          // Gesture starts outside the selection: deselect immediately.
+          // This runs even for fast taps where onDrawEnd may never fire
+          // (e.g. when the TapGestureRecognizer wins the arena instead).
+          if (select.doneSelecting) {
+            Select.currentSelect.unselect();
+          }
+          select.onDragStart(position, dragPageIndex!);
+          history.canRedo = true; // selection doesn't affect history
+        }
       }
     } else if (currentTool is LaserPointer) {
       (currentTool as LaserPointer).onDragStart(position, page, dragPageIndex!);
@@ -664,13 +749,52 @@ class EditorState extends State<Editor> {
     } else if (currentTool is Select) {
       final select = currentTool as Select;
       if (select.doneSelecting) {
-        for (final stroke in select.selectResult.strokes) {
-          stroke.shift(offset);
+        if (_scaleHandleIndex != null) {
+          // Scale gesture: resize the selection around the pinned corner/edge
+          final prevBounds = _scalePreviousBounds!;
+          final newBounds = _computeNewBounds(
+            _scaleHandleIndex!,
+            position,
+            prevBounds,
+          );
+          if (newBounds.width > 1 && newBounds.height > 1) {
+            final pinnedPoint = SelectResult.pinnedPointForHandle(
+              _scaleHandleIndex!,
+              _scaleFromBounds!,
+            );
+            final sx = newBounds.width / prevBounds.width;
+            final sy = newBounds.height / prevBounds.height;
+            for (final stroke in select.selectResult.strokes) {
+              stroke.scale(pinnedPoint, sx, sy);
+            }
+            for (final image in select.selectResult.images) {
+              image.dstRect = Rect.fromLTRB(
+                pinnedPoint.dx + (image.dstRect.left - pinnedPoint.dx) * sx,
+                pinnedPoint.dy + (image.dstRect.top - pinnedPoint.dy) * sy,
+                pinnedPoint.dx + (image.dstRect.right - pinnedPoint.dx) * sx,
+                pinnedPoint.dy + (image.dstRect.bottom - pinnedPoint.dy) * sy,
+              );
+            }
+            // Also transform the lasso path so the bounding rect stays in sync
+            final m = Matrix4.identity()
+              ..translateByDouble(pinnedPoint.dx, pinnedPoint.dy, 0, 1)
+              ..scaleByDouble(sx, sy, 1, 1)
+              ..translateByDouble(-pinnedPoint.dx, -pinnedPoint.dy, 0, 1);
+            select.selectResult.path = select.selectResult.path.transform(
+              m.storage,
+            );
+            _scalePreviousBounds = newBounds;
+          }
+        } else {
+          // Move gesture
+          for (final stroke in select.selectResult.strokes) {
+            stroke.shift(offset);
+          }
+          for (final image in select.selectResult.images) {
+            image.dstRect = image.dstRect.shift(offset);
+          }
+          select.selectResult.path = select.selectResult.path.shift(offset);
         }
-        for (final image in select.selectResult.images) {
-          image.dstRect = image.dstRect.shift(offset);
-        }
-        select.selectResult.path = select.selectResult.path.shift(offset);
       } else {
         select.onDragUpdate(position);
       }
@@ -765,29 +889,64 @@ class EditorState extends State<Editor> {
           ),
         );
       } else if (currentTool is Select) {
-        if (moveOffset == .zero) return;
         final select = currentTool as Select;
-        if (select.doneSelecting) {
-          history.recordChange(
-            EditorHistoryItem(
-              type: .move,
-              pageIndex: dragPageIndex!,
-              strokes: select.selectResult.strokes,
-              images: select.selectResult.images,
-              offset: .fromLTRB(
-                moveOffset.dx,
-                moveOffset.dy,
-                moveOffset.dx,
-                moveOffset.dy,
-              ),
-            ),
+        if (_scaleHandleIndex != null) {
+          // Scale gesture ended - record in history
+          final currentBounds = select.selectResult.boundingRect;
+          final pinnedPoint = SelectResult.pinnedPointForHandle(
+            _scaleHandleIndex!,
+            _scaleFromBounds!,
           );
+          if (_scaleFromBounds != currentBounds) {
+            history.recordChange(
+              EditorHistoryItem(
+                type: .scale,
+                pageIndex: dragPageIndex!,
+                strokes: select.selectResult.strokes,
+                images: select.selectResult.images,
+                scaleBounds: (
+                  scaleOrigin: pinnedPoint,
+                  fromBounds: _scaleFromBounds!,
+                  toBounds: currentBounds,
+                ),
+              ),
+            );
+          }
+          _scaleHandleIndex = null;
+          _scaleFromBounds = null;
+          _scalePreviousBounds = null;
         } else {
-          shouldSave = false;
-          select.onDragEnd(page.strokes, page.images);
+          if (moveOffset == .zero) {
+            // Single tap with no drag: if the tap was outside the current
+            // selection (doneSelecting is false because onDragStart reset it),
+            // deselect everything. A tap inside the selection does nothing.
+            if (!select.doneSelecting) {
+              Select.currentSelect.unselect();
+            }
+            return;
+          }
+          if (select.doneSelecting) {
+            history.recordChange(
+              EditorHistoryItem(
+                type: .move,
+                pageIndex: dragPageIndex!,
+                strokes: select.selectResult.strokes,
+                images: select.selectResult.images,
+                offset: .fromLTRB(
+                  moveOffset.dx,
+                  moveOffset.dy,
+                  moveOffset.dx,
+                  moveOffset.dy,
+                ),
+              ),
+            );
+          } else {
+            shouldSave = false;
+            select.onDragEnd(page.strokes, page.images);
 
-          if (select.selectResult.isEmpty) {
-            Select.currentSelect.unselect();
+            if (select.selectResult.isEmpty) {
+              Select.currentSelect.unselect();
+            }
           }
         }
       } else if (currentTool is LaserPointer) {
@@ -2221,6 +2380,62 @@ class EditorState extends State<Editor> {
     stows.lastShapePenOptions.notifyListeners();
 
     super.dispose();
+  }
+
+  /// Computes the new bounding [Rect] that results from dragging handle
+  /// [handleIndex] to [position], given the previous frame's bounds.
+  ///
+  /// Corner handles (0, 2, 5, 7) affect both axes.
+  /// Edge handles (1, 6) affect only the vertical axis (left/right stay fixed).
+  /// Edge handles (3, 4) affect only the horizontal axis (top/bottom stay fixed).
+  Rect _computeNewBounds(
+    int handleIndex,
+    Offset position,
+    Rect previousBounds,
+  ) {
+    final pinnedPoint = SelectResult.pinnedPointForHandle(
+      handleIndex,
+      _scaleFromBounds!,
+    );
+    const minSize = 2.0;
+
+    if (handleIndex == 0 ||
+        handleIndex == 2 ||
+        handleIndex == 5 ||
+        handleIndex == 7) {
+      // Corner handles — both axes change
+      final r = Rect.fromPoints(position, pinnedPoint);
+      return Rect.fromLTRB(
+        r.left,
+        r.top,
+        r.right < r.left + minSize ? r.left + minSize : r.right,
+        r.bottom < r.top + minSize ? r.top + minSize : r.bottom,
+      );
+    } else if (handleIndex == 1 || handleIndex == 6) {
+      // Top/bottom edge — only Y changes; X stays fixed from _scaleFromBounds
+      final top = position.dy < pinnedPoint.dy ? position.dy : pinnedPoint.dy;
+      final bottom = position.dy > pinnedPoint.dy
+          ? position.dy
+          : pinnedPoint.dy;
+      return Rect.fromLTRB(
+        _scaleFromBounds!.left,
+        top,
+        _scaleFromBounds!.right,
+        bottom < top + minSize ? top + minSize : bottom,
+      );
+    } else if (handleIndex == 3 || handleIndex == 4) {
+      // Left/right edge — only X changes; Y stays fixed from _scaleFromBounds
+      final left = position.dx < pinnedPoint.dx ? position.dx : pinnedPoint.dx;
+      final right = position.dx > pinnedPoint.dx ? position.dx : pinnedPoint.dx;
+      return Rect.fromLTRB(
+        left,
+        _scaleFromBounds!.top,
+        right < left + minSize ? left + minSize : right,
+        _scaleFromBounds!.bottom,
+      );
+    }
+
+    return previousBounds;
   }
 
   Future<void> _cleanUpAsync() async {

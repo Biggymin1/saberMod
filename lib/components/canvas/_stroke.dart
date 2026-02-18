@@ -56,6 +56,20 @@ class Stroke {
     _highQualityPath = _highQualityPath?.shift(offset);
   }
 
+  /// Scales all points in this stroke around [origin]
+  /// by the given [sx] (horizontal) and [sy] (vertical) factors.
+  void scale(Offset origin, double sx, double sy) {
+    for (int i = 0; i < points.length; i++) {
+      final p = points[i];
+      points[i] = PointVector(
+        origin.dx + (p.x - origin.dx) * sx,
+        origin.dy + (p.y - origin.dy) * sy,
+        p.pressure,
+      );
+    }
+    markPolygonNeedsUpdating();
+  }
+
   void markPolygonNeedsUpdating() {
     _lowQualityPolygon = null;
     _highQualityPolygon = null;

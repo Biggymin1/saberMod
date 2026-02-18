@@ -127,6 +127,18 @@ class CircleStroke extends Stroke {
   }
 
   @override
+  void scale(Offset origin, double sx, double sy) {
+    // Scale the center around the origin
+    center = Offset(
+      origin.dx + (center.dx - origin.dx) * sx,
+      origin.dy + (center.dy - origin.dy) * sy,
+    );
+    // Use the average of sx and sy to scale the radius uniformly
+    radius *= (sx + sy) / 2;
+    markPolygonNeedsUpdating();
+  }
+
+  @override
   @Deprecated('We already know the shape is a circle.')
   RecognizedUnistroke detectShape() {
     return RecognizedUnistroke(

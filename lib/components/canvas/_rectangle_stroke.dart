@@ -139,6 +139,16 @@ class RectangleStroke extends Stroke {
   }
 
   @override
+  void scale(Offset origin, double sx, double sy) {
+    final newLeft = origin.dx + (rect.left - origin.dx) * sx;
+    final newTop = origin.dy + (rect.top - origin.dy) * sy;
+    final newRight = origin.dx + (rect.right - origin.dx) * sx;
+    final newBottom = origin.dy + (rect.bottom - origin.dy) * sy;
+    rect = Rect.fromLTRB(newLeft, newTop, newRight, newBottom);
+    markPolygonNeedsUpdating();
+  }
+
+  @override
   @Deprecated('We already know the shape is a rectangle.')
   RecognizedUnistroke detectShape() {
     return RecognizedUnistroke(

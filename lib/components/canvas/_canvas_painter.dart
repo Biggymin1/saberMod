@@ -260,6 +260,35 @@ class CanvasPainter extends CustomPainter {
         ..strokeWidth = 3
         ..style = .stroke,
     );
+
+    // When selection is complete (has strokes/images), draw bounding box + handles
+    if (!currentSelection!.isEmpty) {
+      final bounds = currentSelection!.boundingRect;
+
+      // draw bounding rect outline
+      canvas.drawRect(
+        bounds,
+        Paint()
+          ..color = primaryColor.withValues(alpha: 0.8)
+          ..strokeWidth = max(1.0, 2.0 / currentScale)
+          ..style = PaintingStyle.stroke,
+      );
+
+      // draw 8 resize handles
+      final fillPaint = Paint()
+        ..color = Colors.white
+        ..style = PaintingStyle.fill;
+      final borderPaint = Paint()
+        ..color = primaryColor
+        ..strokeWidth = max(1.0, 1.5 / currentScale)
+        ..style = PaintingStyle.stroke;
+
+      for (int i = 0; i < 8; i++) {
+        final handleRect = SelectResult.handleRectAt(i, bounds, currentScale);
+        canvas.drawRect(handleRect, fillPaint);
+        canvas.drawRect(handleRect, borderPaint);
+      }
+    }
   }
 
   static const double _pageIndicatorFontSize = 20;
