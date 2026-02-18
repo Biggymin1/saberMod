@@ -24,6 +24,9 @@ class EditorPage extends ChangeNotifier implements HasSize {
   static const double defaultHeight = defaultWidth * 1.4;
   static const defaultSize = Size(defaultWidth, defaultHeight);
 
+  /// Landscape orientation (width and height swapped from portrait)
+  static const landscapeSize = Size(defaultHeight, defaultWidth);
+
   /// Whiteboard uses a single large canvas (3000x3000)
   static const double whiteboardWidth = 3000;
   static const double whiteboardHeight = 3000;

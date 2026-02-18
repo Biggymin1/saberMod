@@ -34,10 +34,22 @@ class ToolbarIconButton extends StatelessWidget {
         return colorScheme.onSurface.withValues(alpha: 0.4);
       }
       if (states.contains(WidgetState.selected)) {
-        return colorScheme.onPrimary;
+        return Colors.white;
       }
-      return colorScheme.primary;
+      return Colors.white;
     });
+    // Black outline shadows applied to each icon glyph
+    const _iconShadows = [
+      Shadow(color: Colors.black, blurRadius: 0, offset: Offset(1, 0)),
+      Shadow(color: Colors.black, blurRadius: 0, offset: Offset(-1, 0)),
+      Shadow(color: Colors.black, blurRadius: 0, offset: Offset(0, 1)),
+      Shadow(color: Colors.black, blurRadius: 0, offset: Offset(0, -1)),
+      Shadow(color: Colors.black, blurRadius: 0, offset: Offset(1, 1)),
+      Shadow(color: Colors.black, blurRadius: 0, offset: Offset(-1, -1)),
+      Shadow(color: Colors.black, blurRadius: 0, offset: Offset(1, -1)),
+      Shadow(color: Colors.black, blurRadius: 0, offset: Offset(-1, 1)),
+    ];
+
     final buttonStyle = ButtonStyle(
       backgroundColor: backgroundColor,
       iconColor: foregroundColor,
@@ -54,7 +66,10 @@ class ToolbarIconButton extends StatelessWidget {
         onPressed: (enabled) ? onPressed : null,
         tooltip: tooltip,
         isSelected: selected,
-        icon: child,
+        icon: IconTheme(
+          data: IconTheme.of(context).copyWith(shadows: _iconShadows),
+          child: child,
+        ),
       ),
     );
   }

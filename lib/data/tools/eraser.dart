@@ -1,5 +1,6 @@
 import 'dart:ui';
 
+import 'package:saber/components/canvas/_rectangle_stroke.dart';
 import 'package:saber/components/canvas/_stroke.dart';
 
 import 'package:saber/data/tools/_tool.dart';
@@ -85,6 +86,12 @@ class Eraser extends Tool {
     double sqrSize,
   ) {
     if (stroke.length <= 3) {
+      if (stroke.lowQualityPath.contains(eraserPos)) return true;
+    }
+
+    // For rectangle strokes (e.g. links), also check if the eraser is
+    // inside the filled area — not just near the border.
+    if (stroke is RectangleStroke) {
       if (stroke.lowQualityPath.contains(eraserPos)) return true;
     }
 

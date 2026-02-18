@@ -316,14 +316,12 @@ class EditorState extends State<Editor> {
   /// Whether the current file is the whiteboard
   bool get isWhiteboard => coreInfo.filePath == Whiteboard.filePath;
 
-  /// Creates pages until the given page index exists,
-  /// plus an extra blank page
-  /// For whiteboard, only allows a single page (no additional pages)
+  /// Creates pages until the given page index exists.
+  /// Does NOT add an extra blank page beyond the requested index.
+  /// For whiteboard, only allows a single page (no additional pages).
   void createPage(int pageIndex) {
     // For whiteboard, don't create additional pages - only allow single page
     if (isWhiteboard) {
-      // If requesting page 0 and we have at least 1 page, do nothing
-      // If requesting page beyond 0, cap it at 0
       if (coreInfo.pages.isEmpty) {
         coreInfo.pages.add(EditorPage(size: EditorPage.whiteboardSize));
         listenToQuillChanges(coreInfo.pages[0].quill, 0);
@@ -331,7 +329,7 @@ class EditorState extends State<Editor> {
       return;
     }
 
-    while (pageIndex >= coreInfo.pages.length - 1) {
+    while (pageIndex >= coreInfo.pages.length) {
       final page = EditorPage();
       coreInfo.pages.add(page);
       listenToQuillChanges(page.quill, coreInfo.pages.length - 1);
@@ -1069,10 +1067,6 @@ class EditorState extends State<Editor> {
         pageIndex: pageIndex,
         event: event,
       );
-      // Don't create new pages for whiteboard - only allow single page
-      if (!isWhiteboard) {
-        createPage(pageIndex); // create empty last page
-      }
       if (undoRedoButtonsNeedUpdating) {
         setState(() {});
       }
@@ -1484,8 +1478,11 @@ class EditorState extends State<Editor> {
   Future<bool> importPdfFromFilePath(String path) async {
     final pdfDocument = await coreInfo.assetCache.pdfDocumentCache.load(path);
 
-    final emptyPage = coreInfo.pages.removeLast();
-    assert(emptyPage.isEmpty);
+    // Remove the trailing empty page (if any) so PDF pages are appended cleanly.
+    final EditorPage? removedEmptyPage =
+        (coreInfo.pages.isNotEmpty && coreInfo.pages.last.isEmpty)
+        ? coreInfo.pages.removeLast()
+        : null;
 
     for (final pdfPage in pdfDocument.pages) {
       assert(pdfPage.pageNumber >= 1, 'pdfrx page numbers start at 1');
@@ -1526,7 +1523,8 @@ class EditorState extends State<Editor> {
       );
     }
 
-    coreInfo.pages.add(emptyPage);
+    // Re-add the empty trailing page we removed (if we removed one)
+    if (removedEmptyPage != null) coreInfo.pages.add(removedEmptyPage);
     if (mounted) setState(() {});
 
     autosaveAfterDelay();
@@ -1615,9 +1613,6 @@ class EditorState extends State<Editor> {
   Widget build(BuildContext context) {
     final colorScheme = ColorScheme.of(context);
     final platform = Theme.of(context).platform;
-    final isToolbarVertical =
-        stows.editorToolbarAlignment.value == AxisDirection.left ||
-        stows.editorToolbarAlignment.value == AxisDirection.right;
 
     final Widget canvas = CanvasGestureDetector(
       key: _canvasGestureDetectorKey,
@@ -1676,221 +1671,223 @@ class EditorState extends State<Editor> {
           )
         : null;
 
-    final Widget toolbar = Collapsible(
-      axis: isToolbarVertical
-          ? CollapsibleAxis.horizontal
-          : CollapsibleAxis.vertical,
-      collapsed:
-          DynamicMaterialApp.isFullscreen &&
-          !stows.editorToolbarShowInFullscreen.value,
-      maintainState: true,
-      child: SafeArea(
-        bottom: stows.editorToolbarAlignment.value != AxisDirection.up,
-        child: Toolbar(
-          readOnly: coreInfo.readOnly,
-          setTool: (tool) {
-            setState(() {
-              if (tool is Eraser) {
-                // setTool(Eraser) is called to toggle eraser
-                if (currentTool is Eraser && tmpTool != null) {
-                  // switch to previous tool
-                  tool = tmpTool!;
-                  tmpTool = null;
-                } else {
-                  // store previous tool to restore it later
-                  tmpTool = currentTool;
-                }
-              }
+    // Determine the edge/corner where the floating toolbar is anchored.
+    final toolbarAlignment = stows.editorToolbarAlignment.value;
+    final double toolbarMargin = 16;
 
-              currentTool = tool;
+    // Position the floating toolbar based on the alignment pref.
+    // bottom/top/left/right edges.
+    final double? floatBottom =
+        (toolbarAlignment == AxisDirection.down ||
+            toolbarAlignment == AxisDirection.left ||
+            toolbarAlignment == AxisDirection.right)
+        ? toolbarMargin
+        : null;
+    final double? floatTop = toolbarAlignment == AxisDirection.up
+        ? toolbarMargin
+        : null;
+    final double? floatLeft = (toolbarAlignment == AxisDirection.left)
+        ? toolbarMargin
+        : null;
+    final double? floatRight =
+        (toolbarAlignment == AxisDirection.right ||
+            toolbarAlignment == AxisDirection.down ||
+            toolbarAlignment == AxisDirection.up)
+        ? toolbarMargin
+        : null;
 
-              if (currentTool is Highlighter) {
-                Highlighter.currentHighlighter = currentTool as Highlighter;
-              } else if (currentTool is Pencil) {
-                Pencil.currentPencil = currentTool as Pencil;
-              } else if (currentTool is Pen) {
-                Pen.currentPen = currentTool as Pen;
-              }
-            });
-          },
-          currentTool: currentTool,
-          duplicateSelection: () {
-            final select = currentTool as Select;
-            if (!select.doneSelecting) return;
+    final Widget body = Stack(
+      children: [
+        // Canvas fills the whole screen
+        Positioned.fill(child: canvas),
+        // Readonly banner at the bottom
+        if (readonlyBanner != null)
+          Positioned(bottom: 0, left: 0, right: 0, child: readonlyBanner),
+        // Floating toolbar overlay
+        if (!(DynamicMaterialApp.isFullscreen &&
+            !stows.editorToolbarShowInFullscreen.value))
+          Positioned(
+            bottom: floatBottom,
+            top: floatTop,
+            left: floatLeft,
+            right: floatRight,
+            child: SafeArea(
+              bottom: stows.editorToolbarAlignment.value != AxisDirection.up,
+              child: Toolbar(
+                readOnly: coreInfo.readOnly,
+                setTool: (tool) {
+                  setState(() {
+                    if (tool is Eraser) {
+                      // setTool(Eraser) is called to toggle eraser
+                      if (currentTool is Eraser && tmpTool != null) {
+                        // switch to previous tool
+                        tool = tmpTool!;
+                        tmpTool = null;
+                      } else {
+                        // store previous tool to restore it later
+                        tmpTool = currentTool;
+                      }
+                    }
 
-            setState(() {
-              final page = coreInfo.pages[select.selectResult.pageIndex];
-              final strokes = select.selectResult.strokes;
-              final images = select.selectResult.images;
+                    currentTool = tool;
 
-              const duplicationFeedbackOffset = Offset(25, -25);
+                    if (currentTool is Highlighter) {
+                      Highlighter.currentHighlighter =
+                          currentTool as Highlighter;
+                    } else if (currentTool is Pencil) {
+                      Pencil.currentPencil = currentTool as Pencil;
+                    } else if (currentTool is Pen) {
+                      Pen.currentPen = currentTool as Pen;
+                    }
+                  });
+                },
+                currentTool: currentTool,
+                duplicateSelection: () {
+                  final select = currentTool as Select;
+                  if (!select.doneSelecting) return;
 
-              final duplicatedStrokes = strokes.map((stroke) {
-                return stroke.copy()..shift(duplicationFeedbackOffset);
-              }).toList();
+                  setState(() {
+                    final page = coreInfo.pages[select.selectResult.pageIndex];
+                    final strokes = select.selectResult.strokes;
+                    final images = select.selectResult.images;
 
-              final duplicatedImages = images.map((image) {
-                return image.copy()
-                  ..id = coreInfo.nextImageId++
-                  ..dstRect.shift(duplicationFeedbackOffset);
-              }).toList();
+                    const duplicationFeedbackOffset = Offset(25, -25);
 
-              page.strokes.addAll(duplicatedStrokes);
-              page.images.addAll(duplicatedImages);
+                    final duplicatedStrokes = strokes.map((stroke) {
+                      return stroke.copy()..shift(duplicationFeedbackOffset);
+                    }).toList();
 
-              select.selectResult = select.selectResult.copyWith(
-                strokes: duplicatedStrokes,
-                images: duplicatedImages,
-                path: select.selectResult.path.shift(duplicationFeedbackOffset),
-              );
+                    final duplicatedImages = images.map((image) {
+                      return image.copy()
+                        ..id = coreInfo.nextImageId++
+                        ..dstRect.shift(duplicationFeedbackOffset);
+                    }).toList();
 
-              history.recordChange(
-                EditorHistoryItem(
-                  type: .draw,
-                  pageIndex: select.selectResult.pageIndex,
-                  strokes: duplicatedStrokes,
-                  images: duplicatedImages,
-                ),
-              );
-              autosaveAfterDelay();
-            });
-          },
-          deleteSelection: () {
-            final select = currentTool as Select;
-            if (!select.doneSelecting) {
-              return;
-            }
+                    page.strokes.addAll(duplicatedStrokes);
+                    page.images.addAll(duplicatedImages);
 
-            setState(() {
-              final page = coreInfo.pages[select.selectResult.pageIndex];
-              final strokes = select.selectResult.strokes;
-              final images = select.selectResult.images;
-
-              for (final stroke in strokes) {
-                page.strokes.remove(stroke);
-              }
-              for (final image in images) {
-                page.images.remove(image);
-              }
-
-              select.unselect();
-
-              history.recordChange(
-                EditorHistoryItem(
-                  type: .erase,
-                  pageIndex: strokes.first.pageIndex,
-                  strokes: strokes,
-                  images: images,
-                ),
-              );
-              autosaveAfterDelay();
-            });
-          },
-          setColor: (color) {
-            setState(() {
-              updateColorBar(color);
-
-              if (currentTool is Highlighter) {
-                (currentTool as Highlighter).color = color.withAlpha(
-                  Highlighter.alpha,
-                );
-              } else if (currentTool is Pen) {
-                (currentTool as Pen).color = color;
-              } else if (currentTool is Select) {
-                // Changes color of selected strokes
-                final select = currentTool as Select;
-                if (select.doneSelecting) {
-                  final strokes = select.selectResult.strokes;
-
-                  final colorChange = <Stroke, ColorChange>{};
-                  for (final stroke in strokes) {
-                    colorChange[stroke] = ColorChange(
-                      previous: stroke.color,
-                      current: color,
+                    select.selectResult = select.selectResult.copyWith(
+                      strokes: duplicatedStrokes,
+                      images: duplicatedImages,
+                      path: select.selectResult.path.shift(
+                        duplicationFeedbackOffset,
+                      ),
                     );
-                    stroke.color = color;
+
+                    history.recordChange(
+                      EditorHistoryItem(
+                        type: .draw,
+                        pageIndex: select.selectResult.pageIndex,
+                        strokes: duplicatedStrokes,
+                        images: duplicatedImages,
+                      ),
+                    );
+                    autosaveAfterDelay();
+                  });
+                },
+                deleteSelection: () {
+                  final select = currentTool as Select;
+                  if (!select.doneSelecting) return;
+
+                  setState(() {
+                    final page = coreInfo.pages[select.selectResult.pageIndex];
+                    final strokes = select.selectResult.strokes;
+                    final images = select.selectResult.images;
+
+                    for (final stroke in strokes) {
+                      page.strokes.remove(stroke);
+                    }
+                    for (final image in images) {
+                      page.images.remove(image);
+                    }
+
+                    select.unselect();
+
+                    history.recordChange(
+                      EditorHistoryItem(
+                        type: .erase,
+                        pageIndex: strokes.first.pageIndex,
+                        strokes: strokes,
+                        images: images,
+                      ),
+                    );
+                    autosaveAfterDelay();
+                  });
+                },
+                setColor: (color) {
+                  setState(() {
+                    updateColorBar(color);
+
+                    if (currentTool is Highlighter) {
+                      (currentTool as Highlighter).color = color.withAlpha(
+                        Highlighter.alpha,
+                      );
+                    } else if (currentTool is Pen) {
+                      (currentTool as Pen).color = color;
+                    } else if (currentTool is Select) {
+                      final select = currentTool as Select;
+                      if (select.doneSelecting) {
+                        final strokes = select.selectResult.strokes;
+
+                        final colorChange = <Stroke, ColorChange>{};
+                        for (final stroke in strokes) {
+                          colorChange[stroke] = ColorChange(
+                            previous: stroke.color,
+                            current: color,
+                          );
+                          stroke.color = color;
+                        }
+
+                        history.recordChange(
+                          EditorHistoryItem(
+                            type: .changeColor,
+                            pageIndex: strokes.first.pageIndex,
+                            strokes: strokes,
+                            colorChange: colorChange,
+                            images: [],
+                          ),
+                        );
+                        autosaveAfterDelay();
+                      }
+                    }
+                  });
+                },
+                quillFocus: quillFocus,
+                textEditing: currentTool == Tool.textEditing,
+                toggleTextEditing: () => setState(() {
+                  if (currentTool == Tool.textEditing) {
+                    currentTool = Pen.currentPen;
+                    for (final page in coreInfo.pages) {
+                      page.quill.controller.moveCursorToPosition(
+                        page.quill.controller.selection.extentOffset,
+                      );
+                      page.quill.focusNode.unfocus();
+                    }
+                  } else {
+                    currentTool = Tool.textEditing;
+                    quillFocus.value = coreInfo.pages[currentPageIndex].quill
+                      ..focusNode.requestFocus();
                   }
-
-                  history.recordChange(
-                    EditorHistoryItem(
-                      type: .changeColor,
-                      pageIndex: strokes.first.pageIndex,
-                      strokes: strokes,
-                      colorChange: colorChange,
-                      images: [],
-                    ),
-                  );
-                  autosaveAfterDelay();
-                }
-              }
-            });
-          },
-          quillFocus: quillFocus,
-          textEditing: currentTool == Tool.textEditing,
-          toggleTextEditing: () => setState(() {
-            if (currentTool == Tool.textEditing) {
-              currentTool = Pen.currentPen;
-              for (final page in coreInfo.pages) {
-                // unselect text, but maintain cursor position
-                page.quill.controller.moveCursorToPosition(
-                  page.quill.controller.selection.extentOffset,
-                );
-                page.quill.focusNode.unfocus();
-              }
-            } else {
-              currentTool = Tool.textEditing;
-              quillFocus.value = coreInfo.pages[currentPageIndex].quill
-                ..focusNode.requestFocus();
-            }
-          }),
-          undo: undo,
-          isUndoPossible: history.canUndo,
-          redo: redo,
-          isRedoPossible: history.canRedo,
-          toggleFingerDrawing: () {
-            stows.editorFingerDrawing.value = !stows.editorFingerDrawing.value;
-            lastSeenPointerCount = 0;
-          },
-          pickPhoto: _pickPhotos,
-          paste: paste,
-          exportAsSba: exportAsSba,
-          exportAsPdf: exportAsPdf,
-          exportAsPng: null,
-        ),
-      ),
-    );
-
-    final Widget body;
-    if (isToolbarVertical) {
-      body = Row(
-        textDirection: stows.editorToolbarAlignment.value == AxisDirection.left
-            ? .ltr
-            : .rtl,
-        children: [
-          toolbar,
-          Expanded(
-            child: Column(
-              children: [
-                Expanded(child: canvas),
-                if (readonlyBanner != null) readonlyBanner,
-              ],
+                }),
+                undo: undo,
+                isUndoPossible: history.canUndo,
+                redo: redo,
+                isRedoPossible: history.canRedo,
+                toggleFingerDrawing: () {
+                  stows.editorFingerDrawing.value =
+                      !stows.editorFingerDrawing.value;
+                  lastSeenPointerCount = 0;
+                },
+                pickPhoto: _pickPhotos,
+                paste: paste,
+                exportAsSba: exportAsSba,
+                exportAsPdf: exportAsPdf,
+                exportAsPng: null,
+              ),
             ),
           ),
-        ],
-      );
-    } else {
-      body = Column(
-        verticalDirection:
-            stows.editorToolbarAlignment.value == AxisDirection.up
-            ? VerticalDirection.up
-            : VerticalDirection.down,
-        children: [
-          Expanded(child: canvas),
-          toolbar,
-          if (readonlyBanner != null) readonlyBanner,
-        ],
-      );
-    }
+      ],
+    );
 
     return ValueListenableBuilder(
       valueListenable: savingState,
@@ -1915,85 +1912,135 @@ class EditorState extends State<Editor> {
         );
       },
       child: Scaffold(
-        appBar: DynamicMaterialApp.isFullscreen
-            ? null
-            : AppBar(
-                toolbarHeight: kToolbarHeight,
-                title: widget.customTitle != null
-                    ? Text(widget.customTitle!)
-                    : Form(
-                        key: _filenameFormKey,
-                        autovalidateMode: AutovalidateMode.onUserInteraction,
-                        child: TextFormField(
-                          decoration: const InputDecoration(
-                            border: InputBorder.none,
-                          ),
-                          controller: filenameTextEditingController,
-                          onChanged: renameFile,
-                          autofocus: needsNaming,
-                          validator: _validateFilenameTextField,
-                        ),
-                      ),
-                leading: SaveIndicator(
-                  savingState: savingState,
-                  triggerSave: saveToFile,
-                ),
-                actions: [
-                  // Hide page management buttons for whiteboard
-                  if (!isWhiteboard) ...[
-                    IconButton(
-                      icon: const AdaptiveIcon(
-                        icon: Icons.insert_page_break,
-                        cupertinoIcon: CupertinoIcons.add,
-                      ),
-                      tooltip: t.editor.menu.insertPage,
-                      onPressed: () => setState(() {
-                        final currentPageIndex = this.currentPageIndex;
-                        insertPageAfter(currentPageIndex);
-                        CanvasGestureDetector.scrollToPage(
-                          pageIndex: currentPageIndex + 1,
-                          pages: coreInfo.pages,
-                          screenWidth: MediaQuery.sizeOf(context).width,
-                          transformationController: _transformationController,
-                        );
-                      }),
-                    ),
-                    IconButton(
-                      icon: const AdaptiveIcon(
-                        icon: Icons.grid_view,
-                        cupertinoIcon: CupertinoIcons.rectangle_grid_2x2,
-                      ),
-                      tooltip: t.editor.pages,
-                      onPressed: () {
-                        showDialog(
-                          context: context,
-                          builder: (context) => AdaptiveAlertDialog(
-                            title: Text(t.editor.pages),
-                            content: pageManager(context),
-                            actions: const [],
-                          ),
-                        );
-                      },
+        extendBodyBehindAppBar: DynamicMaterialApp.isFullscreen,
+        appBar: AppBar(
+          toolbarHeight: kToolbarHeight,
+          backgroundColor: DynamicMaterialApp.isFullscreen
+              ? Colors.transparent
+              : null,
+          elevation: DynamicMaterialApp.isFullscreen ? 0 : null,
+          forceMaterialTransparency: DynamicMaterialApp.isFullscreen,
+          foregroundColor: DynamicMaterialApp.isFullscreen
+              ? Colors.black
+              : null,
+          iconTheme: DynamicMaterialApp.isFullscreen
+              ? const IconThemeData(
+                  color: Colors.black,
+                  shadows: [
+                    Shadow(
+                      color: Colors.white,
+                      blurRadius: 6,
+                      offset: Offset(0, 0),
                     ),
                   ],
-                  IconButton(
-                    icon: const AdaptiveIcon(
-                      icon: Icons.more_vert,
-                      cupertinoIcon: CupertinoIcons.ellipsis_vertical,
+                )
+              : null,
+          actionsIconTheme: DynamicMaterialApp.isFullscreen
+              ? const IconThemeData(
+                  color: Colors.black,
+                  shadows: [
+                    Shadow(
+                      color: Colors.white,
+                      blurRadius: 6,
+                      offset: Offset(0, 0),
                     ),
-                    onPressed: () {
-                      showModalBottomSheet(
-                        context: context,
-                        builder: (context) => bottomSheet(context),
-                        isScrollControlled: true,
-                        showDragHandle: true,
-                        backgroundColor: colorScheme.surface,
-                        constraints: const BoxConstraints(maxWidth: 500),
-                      );
-                    },
+                  ],
+                )
+              : null,
+          titleTextStyle: DynamicMaterialApp.isFullscreen
+              ? const TextStyle(
+                  color: Colors.black,
+                  fontSize: 18,
+                  shadows: [
+                    Shadow(
+                      color: Colors.white,
+                      blurRadius: 6,
+                      offset: Offset(0, 0),
+                    ),
+                    Shadow(
+                      color: Colors.white,
+                      blurRadius: 3,
+                      offset: Offset(0, 0),
+                    ),
+                  ],
+                )
+              : null,
+          title: widget.customTitle != null
+              ? Text(widget.customTitle!)
+              : Form(
+                  key: _filenameFormKey,
+                  autovalidateMode: AutovalidateMode.onUserInteraction,
+                  child: TextFormField(
+                    decoration: const InputDecoration(border: InputBorder.none),
+                    controller: filenameTextEditingController,
+                    onChanged: renameFile,
+                    autofocus: needsNaming,
+                    validator: _validateFilenameTextField,
                   ),
-                ],
+                ),
+          leading: SaveIndicator(
+            savingState: savingState,
+            triggerSave: saveToFile,
+          ),
+          actions: [
+            // Hide page management buttons for whiteboard
+            if (!isWhiteboard) ...[
+              IconButton(
+                icon: const AdaptiveIcon(
+                  icon: Icons.insert_page_break,
+                  cupertinoIcon: CupertinoIcons.add,
+                ),
+                tooltip: t.editor.menu.insertPage,
+                onPressed: () async {
+                  final pageSize = await _pickPageOrientation();
+                  if (pageSize == null) return;
+                  if (!mounted) return;
+                  final currentPageIndex = this.currentPageIndex;
+                  insertPageAfter(currentPageIndex, pageSize: pageSize);
+                  CanvasGestureDetector.scrollToPage(
+                    pageIndex: currentPageIndex + 1,
+                    pages: coreInfo.pages,
+                    screenWidth: MediaQuery.sizeOf(context).width,
+                    transformationController: _transformationController,
+                  );
+                },
               ),
+              IconButton(
+                icon: const AdaptiveIcon(
+                  icon: Icons.grid_view,
+                  cupertinoIcon: CupertinoIcons.rectangle_grid_2x2,
+                ),
+                tooltip: t.editor.pages,
+                onPressed: () {
+                  showDialog(
+                    context: context,
+                    builder: (context) => AdaptiveAlertDialog(
+                      title: Text(t.editor.pages),
+                      content: pageManager(context),
+                      actions: const [],
+                    ),
+                  );
+                },
+              ),
+            ],
+            IconButton(
+              icon: const AdaptiveIcon(
+                icon: Icons.more_vert,
+                cupertinoIcon: CupertinoIcons.ellipsis_vertical,
+              ),
+              onPressed: () {
+                showModalBottomSheet(
+                  context: context,
+                  builder: (context) => bottomSheet(context),
+                  isScrollControlled: true,
+                  showDragHandle: true,
+                  backgroundColor: colorScheme.surface,
+                  constraints: const BoxConstraints(maxWidth: 500),
+                );
+              },
+            ),
+          ],
+        ),
         body: body,
         floatingActionButton:
             (DynamicMaterialApp.isFullscreen &&
@@ -2230,12 +2277,46 @@ class EditorState extends State<Editor> {
     );
   }
 
-  void insertPageAfter(int pageIndex) => setState(() {
+  /// Shows a dialog to pick between portrait and landscape orientation.
+  /// Returns the chosen [Size], or null if the user cancelled.
+  Future<Size?> _pickPageOrientation() async {
+    return showDialog<Size>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Page orientation'),
+        content: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            // Portrait option
+            _OrientationOption(
+              label: 'Portrait',
+              icon: Icons.crop_portrait,
+              onTap: () => Navigator.pop(context, EditorPage.defaultSize),
+            ),
+            // Landscape option
+            _OrientationOption(
+              label: 'Landscape',
+              icon: Icons.crop_landscape,
+              onTap: () => Navigator.pop(context, EditorPage.landscapeSize),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void insertPageAfter(int pageIndex, {Size? pageSize}) => setState(() {
     if (coreInfo.readOnly) return;
     // For whiteboard, use the large canvas size (only 1 page allowed)
     final page = isWhiteboard
         ? EditorPage(size: EditorPage.whiteboardSize)
-        : EditorPage();
+        : EditorPage(size: pageSize);
     coreInfo.pages.insert(pageIndex + 1, page);
     listenToQuillChanges(page.quill, pageIndex + 1);
     history.recordChange(
@@ -2449,5 +2530,38 @@ class EditorState extends State<Editor> {
     } finally {
       coreInfo.dispose();
     }
+  }
+}
+
+/// A tappable orientation choice shown in the page orientation picker dialog.
+class _OrientationOption extends StatelessWidget {
+  const _OrientationOption({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = ColorScheme.of(context);
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 48, color: colorScheme.primary),
+            const SizedBox(height: 8),
+            Text(label, style: Theme.of(context).textTheme.bodyMedium),
+          ],
+        ),
+      ),
+    );
   }
 }

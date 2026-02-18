@@ -79,20 +79,17 @@ abstract class SaberTheme {
     ColorScheme colorScheme,
     TargetPlatform platform,
   ) {
+    final surface = platform.isCupertino
+        ? (colorScheme.brightness == .light
+              ? CupertinoColors.white
+              : CupertinoColors.darkBackgroundGray)
+        : (colorScheme.brightness == .light ? Colors.white : Colors.black);
     return colorScheme.copyWith(
-      surface: platform.isCupertino
-          ? (colorScheme.brightness == .light
-                ? CupertinoColors.white
-                : CupertinoColors.darkBackgroundGray)
-          : null,
+      surface: surface,
       // Hack: Mimic Material 3 Expressive color schemes by making
       // surfaceContainer much closer to surface.
       // Remove this when Flutter supports M3E natively.
-      surfaceContainer: Color.lerp(
-        colorScheme.surface,
-        colorScheme.surfaceTint,
-        0.02,
-      )!,
+      surfaceContainer: Color.lerp(surface, colorScheme.surfaceTint, 0.02)!,
     );
   }
 

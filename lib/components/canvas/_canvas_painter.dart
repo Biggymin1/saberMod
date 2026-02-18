@@ -11,6 +11,7 @@ import 'package:saber/components/canvas/_stroke.dart';
 import 'package:saber/components/theming/font_fallbacks.dart';
 import 'package:saber/data/editor/page.dart';
 import 'package:saber/data/extensions/color_extensions.dart';
+import 'package:saber/data/tools/_tool.dart';
 import 'package:saber/data/tools/highlighter.dart';
 import 'package:saber/data/tools/laser_pointer.dart';
 import 'package:saber/data/tools/select.dart';
@@ -141,10 +142,21 @@ class CanvasPainter extends CustomPainter {
         canvas.drawCircle(stroke.center, stroke.radius, shapePaint);
       } else if (stroke is RectangleStroke) {
         final strokeSize = stroke.options.size;
-        canvas.drawRRect(
-          RRect.fromRectAndRadius(stroke.rect, Radius.circular(strokeSize / 4)),
-          shapePaint,
+        final rrect = RRect.fromRectAndRadius(
+          stroke.rect,
+          Radius.circular(strokeSize / 4),
         );
+        if (stroke.toolId == ToolId.link) {
+          // Draw filled background using the stroke color (already semi-transparent)
+          canvas.drawRRect(rrect, Paint()..color = paint.color);
+          // Draw border at full opacity
+          canvas.drawRRect(
+            rrect,
+            shapePaint..color = paint.color.withValues(alpha: 1),
+          );
+        } else {
+          canvas.drawRRect(rrect, shapePaint);
+        }
       } else {
         canvas.drawPath(_selectPath(stroke), paint);
       }
@@ -175,16 +187,31 @@ class CanvasPainter extends CustomPainter {
 
     // Current stroke always uses high quality
     if (currentStroke is RectangleStroke) {
-      final strokeSize = currentStroke!.options.size;
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          (currentStroke as RectangleStroke).rect,
-          Radius.circular(strokeSize / 4),
-        ),
-        paint
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = strokeSize,
+      final rectStroke = currentStroke as RectangleStroke;
+      final strokeSize = rectStroke.options.size;
+      final rrect = RRect.fromRectAndRadius(
+        rectStroke.rect,
+        Radius.circular(strokeSize / 4),
       );
+      if (rectStroke.toolId == ToolId.link) {
+        // Draw filled background using the stroke color (already semi-transparent)
+        canvas.drawRRect(rrect, Paint()..color = color);
+        // Draw border at full opacity
+        canvas.drawRRect(
+          rrect,
+          paint
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = strokeSize
+            ..color = color.withValues(alpha: 1),
+        );
+      } else {
+        canvas.drawRRect(
+          rrect,
+          paint
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = strokeSize,
+        );
+      }
     } else {
       canvas.drawPath(currentStroke!.highQualityPath, paint);
     }

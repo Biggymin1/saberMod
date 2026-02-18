@@ -5,6 +5,7 @@ import 'package:saber/components/canvas/canvas_preview.dart';
 import 'package:saber/components/theming/adaptive_icon.dart';
 import 'package:saber/components/theming/saber_theme.dart';
 import 'package:saber/data/editor/editor_core_info.dart';
+import 'package:saber/data/editor/page.dart';
 import 'package:saber/i18n/strings.g.dart';
 
 class EditorPageManager extends StatefulWidget {
@@ -24,7 +25,7 @@ class EditorPageManager extends StatefulWidget {
   final int? currentPageIndex;
   final VoidCallback redrawAndSave;
 
-  final void Function(int) insertPageAfter;
+  final void Function(int, {Size? pageSize}) insertPageAfter;
   final void Function(int) duplicatePage;
   final void Function(int) clearPage;
   final void Function(int) deletePage;
@@ -42,6 +43,41 @@ class _EditorPageManagerState extends State<EditorPageManager> {
     screenWidth: MediaQuery.sizeOf(context).width,
     transformationController: widget.transformationController,
   );
+
+  /// Shows a dialog to pick between portrait and landscape orientation.
+  /// Returns the chosen [Size], or null if the user cancelled.
+  Future<Size?> _pickPageOrientation() {
+    final colorScheme = ColorScheme.of(context);
+    return showDialog<Size>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Page orientation'),
+        content: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            _OrientationOption(
+              label: 'Portrait',
+              icon: Icons.crop_portrait,
+              colorScheme: colorScheme,
+              onTap: () => Navigator.pop(context, EditorPage.defaultSize),
+            ),
+            _OrientationOption(
+              label: 'Landscape',
+              icon: Icons.crop_landscape,
+              colorScheme: colorScheme,
+              onTap: () => Navigator.pop(context, EditorPage.landscapeSize),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+  }
 
   Future<void> _showBookmarkDialog(int pageIndex) async {
     final page = widget.coreInfo.pages[pageIndex];
@@ -248,10 +284,17 @@ class _EditorPageManagerState extends State<EditorPageManager> {
                                 icon: Icons.insert_page_break,
                                 cupertinoIcon: CupertinoIcons.add,
                               ),
-                              onPressed: () => setState(() {
-                                widget.insertPageAfter(pageIndex);
-                                scrollToPage(pageIndex + 1);
-                              }),
+                              onPressed: () async {
+                                final pageSize = await _pickPageOrientation();
+                                if (pageSize == null) return;
+                                setState(() {
+                                  widget.insertPageAfter(
+                                    pageIndex,
+                                    pageSize: pageSize,
+                                  );
+                                  scrollToPage(pageIndex + 1);
+                                });
+                              },
                             ),
                             IconButton(
                               tooltip: t.editor.menu.duplicatePage,
@@ -322,6 +365,40 @@ class _EditorPageManagerState extends State<EditorPageManager> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// A tappable orientation choice shown in the page orientation picker dialog.
+class _OrientationOption extends StatelessWidget {
+  const _OrientationOption({
+    required this.label,
+    required this.icon,
+    required this.colorScheme,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final ColorScheme colorScheme;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 48, color: colorScheme.primary),
+            const SizedBox(height: 8),
+            Text(label, style: Theme.of(context).textTheme.bodyMedium),
+          ],
+        ),
       ),
     );
   }

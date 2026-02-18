@@ -323,9 +323,8 @@ class EditorCoreInfo {
       }
     }
 
-    // add a page if there are no pages,
-    // or if the last page is not empty
-    if (pages.isEmpty || pages.last.isNotEmpty && !onlyFirstPage) {
+    // add a page if there are no pages
+    if (pages.isEmpty) {
       pages.add(EditorPage(size: fallbackPageSize));
     }
 
