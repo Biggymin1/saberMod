@@ -102,6 +102,18 @@ class _ToolbarState extends State<Toolbar> with SingleTickerProviderStateMixin {
   late AnimationController _expandController;
   late Animation<double> _expandAnimation;
 
+  // Layer links for anchoring pen/pencil/highlighter/color popups to their buttons.
+  final _penLayerLink = LayerLink();
+  final _pencilLayerLink = LayerLink();
+  final _highlighterLayerLink = LayerLink();
+  final _colorLayerLink = LayerLink();
+
+  /// The currently-open pen/pencil/highlighter popup overlay, if any.
+  OverlayEntry? _penPopupOverlay;
+
+  /// The currently-open color popup overlay, if any.
+  OverlayEntry? _colorPopupOverlay;
+
   @override
   void initState() {
     _expandController = AnimationController(
@@ -170,6 +182,7 @@ class _ToolbarState extends State<Toolbar> with SingleTickerProviderStateMixin {
   }
 
   void toggleEraser() {
+    _hidePenPopup();
     toolOptionsType.value = ToolOptions.hide;
     widget.setTool(Eraser()); // this toggles eraser
   }
@@ -200,8 +213,167 @@ class _ToolbarState extends State<Toolbar> with SingleTickerProviderStateMixin {
         showExportOptions.value = false;
         showColorOptions.value = false;
         toolOptionsType.value = ToolOptions.hide;
+        _hidePenPopup();
       }
     });
+  }
+
+  /// Shows the pen options popup anchored to [layerLink].
+  /// [getTool] returns the pen whose options are shown.
+  /// If the popup is already showing for the same link, it is dismissed instead.
+  void _showPenPopup({
+    required LayerLink layerLink,
+    required Tool Function() getTool,
+  }) {
+    // If a popup is already open, close it (toggle off).
+    if (_penPopupOverlay != null) {
+      _hidePenPopup();
+      return;
+    }
+
+    late OverlayEntry entry;
+    entry = OverlayEntry(
+      builder: (context) {
+        return Stack(
+          children: [
+            // Full-screen invisible barrier — tap to dismiss.
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onTap: _hidePenPopup,
+                child: const SizedBox.expand(),
+              ),
+            ),
+            // The popup card, positioned above the button via CompositedTransformFollower.
+            CompositedTransformFollower(
+              link: layerLink,
+              showWhenUnlinked: false,
+              targetAnchor: Alignment.topCenter,
+              followerAnchor: Alignment.bottomCenter,
+              offset: const Offset(0, -8),
+              child: _AnimatedPopup(
+                child: Material(
+                  elevation: 8,
+                  borderRadius: BorderRadius.circular(16),
+                  color: Colors.grey[200],
+                  shadowColor: Colors.black.withValues(alpha: 0.3),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    child: StatefulBuilder(
+                      builder: (context, setPopupState) {
+                        return PenModal(
+                          getTool: getTool,
+                          setTool: (pen) {
+                            widget.setTool(pen);
+                            // Rebuild the popup to reflect new pen type/options.
+                            setPopupState(() {});
+                            // Also rebuild the toolbar so the button icon updates.
+                            setState(() {});
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    _penPopupOverlay = entry;
+    Overlay.of(context).insert(entry);
+  }
+
+  void _hidePenPopup() {
+    _penPopupOverlay?.remove();
+    _penPopupOverlay = null;
+  }
+
+  /// Shows the color picker popup anchored to [layerLink].
+  /// If the popup is already showing, it is dismissed instead.
+  void _showColorPopup({required LayerLink layerLink}) {
+    // If a popup is already open, close it (toggle off).
+    if (_colorPopupOverlay != null) {
+      _hideColorPopup();
+      return;
+    }
+
+    final brightness = Theme.brightnessOf(context);
+    final invert =
+        stows.editorAutoInvert.value && brightness == Brightness.dark;
+
+    final currentColor = switch (widget.currentTool) {
+      final Pen pen => pen.color,
+      final Select select => select.getDominantStrokeColor(),
+      _ => null,
+    };
+
+    late OverlayEntry entry;
+    entry = OverlayEntry(
+      builder: (context) {
+        return Stack(
+          children: [
+            // Full-screen invisible barrier — tap to dismiss.
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onTap: _hideColorPopup,
+                child: const SizedBox.expand(),
+              ),
+            ),
+            // The popup card, positioned above the button via CompositedTransformFollower.
+            CompositedTransformFollower(
+              link: layerLink,
+              showWhenUnlinked: false,
+              targetAnchor: Alignment.topCenter,
+              followerAnchor: Alignment.bottomCenter,
+              offset: const Offset(0, -8),
+              child: _AnimatedPopup(
+                child: Material(
+                  elevation: 8,
+                  borderRadius: BorderRadius.circular(16),
+                  color: Colors.grey[200],
+                  shadowColor: Colors.black.withValues(alpha: 0.3),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    child: StatefulBuilder(
+                      builder: (context, setPopupState) {
+                        return ColorBar(
+                          axis: Axis.vertical,
+                          setColor: (color) {
+                            widget.setColor(color);
+                            setPopupState(() {});
+                            setState(() {});
+                          },
+                          currentColor: currentColor,
+                          invert: invert,
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    _colorPopupOverlay = entry;
+    Overlay.of(context).insert(entry);
+  }
+
+  void _hideColorPopup() {
+    _colorPopupOverlay?.remove();
+    _colorPopupOverlay = null;
   }
 
   @override
@@ -232,7 +404,9 @@ class _ToolbarState extends State<Toolbar> with SingleTickerProviderStateMixin {
           : ToolOptions.hide;
     }
 
-    // ── Sub-panel widgets (export bar, tool options, color bar, quill toolbar) ──
+    // ── Sub-panel widgets (export bar, selection bar, color bar, quill toolbar) ──
+    // Note: pen/pencil/highlighter options are now shown as overlay popups
+    // anchored to each button, NOT inline in this panel.
     final subPanelContent = <Widget>[
       ValueListenableBuilder(
         valueListenable: showExportOptions,
@@ -262,49 +436,15 @@ class _ToolbarState extends State<Toolbar> with SingleTickerProviderStateMixin {
                 ? CollapsibleAxis.horizontal
                 : CollapsibleAxis.vertical,
             maintainState: true,
-            collapsed: toolOptionsType == ToolOptions.hide,
-            child: switch (toolOptionsType) {
-              ToolOptions.hide => const SizedBox.square(
-                dimension: SizePicker.smallLength,
-              ),
-              ToolOptions.pen => PenModal(
-                getTool: () => Pen.currentPen,
-                setTool: widget.setTool,
-              ),
-              ToolOptions.highlighter => PenModal(
-                getTool: () => Highlighter.currentHighlighter,
-                setTool: widget.setTool,
-              ),
-              ToolOptions.pencil => PenModal(
-                getTool: () => Pencil.currentPencil,
-                setTool: widget.setTool,
-              ),
-              ToolOptions.select => SelectionBar(
-                duplicateSelection: widget.duplicateSelection,
-                deleteSelection: widget.deleteSelection,
-              ),
-            },
+            collapsed: toolOptionsType != ToolOptions.select,
+            child: toolOptionsType == ToolOptions.select
+                ? SelectionBar(
+                    duplicateSelection: widget.duplicateSelection,
+                    deleteSelection: widget.deleteSelection,
+                  )
+                : const SizedBox.square(dimension: SizePicker.smallLength),
           );
         },
-      ),
-      ValueListenableBuilder(
-        valueListenable: showColorOptions,
-        builder: (context, showColorOptions, child) {
-          return Collapsible(
-            axis: isToolbarVertical
-                ? CollapsibleAxis.horizontal
-                : CollapsibleAxis.vertical,
-            maintainState: true,
-            collapsed: !showColorOptions,
-            child: child!,
-          );
-        },
-        child: ColorBar(
-          axis: isToolbarVertical ? Axis.vertical : Axis.horizontal,
-          setColor: widget.setColor,
-          currentColor: currentColor,
-          invert: invert,
-        ),
       ),
       ValueListenableBuilder(
         valueListenable: widget.quillFocus,
@@ -365,97 +505,104 @@ class _ToolbarState extends State<Toolbar> with SingleTickerProviderStateMixin {
           alignment: WrapAlignment.center,
           runSpacing: 8,
           children: [
-            ToolbarIconButton(
-              tooltip: Pen.currentPen.name,
-              selected: widget.currentTool == Pen.currentPen,
-              enabled: !widget.readOnly,
-              onPressed: () {
-                if (widget.currentTool == Pen.currentPen) {
-                  if (toolOptionsType.value == ToolOptions.pen) {
+            // ── Pen button with popup anchor ──
+            CompositedTransformTarget(
+              link: _penLayerLink,
+              child: ToolbarIconButton(
+                tooltip: Pen.currentPen.name,
+                selected: widget.currentTool == Pen.currentPen,
+                enabled: !widget.readOnly,
+                onPressed: () {
+                  // Always select the pen tool first.
+                  if (widget.currentTool != Pen.currentPen) {
                     toolOptionsType.value = ToolOptions.hide;
-                  } else {
-                    toolOptionsType.value = ToolOptions.pen;
+                    widget.setTool(Pen.currentPen);
                   }
-                } else {
-                  toolOptionsType.value = ToolOptions.hide;
-                  widget.setTool(Pen.currentPen);
-                }
-              },
-              padding: buttonPadding,
-              child: FaIcon(Pen.currentPen.icon, size: 16),
+                  // Then toggle the popup.
+                  _showPenPopup(
+                    layerLink: _penLayerLink,
+                    getTool: () => Pen.currentPen,
+                  );
+                },
+                padding: buttonPadding,
+                child: FaIcon(Pen.currentPen.icon, size: 16),
+              ),
             ),
-            ToolbarIconButton(
-              tooltip: t.editor.pens.pencil,
-              selected: widget.currentTool == Pencil.currentPencil,
-              enabled: !widget.readOnly,
-              onPressed: () {
-                if (widget.currentTool == Pencil.currentPencil) {
-                  if (toolOptionsType.value == ToolOptions.pencil) {
+            // ── Pencil button with popup anchor ──
+            CompositedTransformTarget(
+              link: _pencilLayerLink,
+              child: ToolbarIconButton(
+                tooltip: t.editor.pens.pencil,
+                selected: widget.currentTool == Pencil.currentPencil,
+                enabled: !widget.readOnly,
+                onPressed: () {
+                  if (widget.currentTool != Pencil.currentPencil) {
                     toolOptionsType.value = ToolOptions.hide;
-                  } else {
-                    toolOptionsType.value = ToolOptions.pencil;
+                    widget.setTool(Pencil.currentPencil);
                   }
-                } else {
-                  toolOptionsType.value = ToolOptions.hide;
-                  widget.setTool(Pencil.currentPencil);
-                }
-              },
-              padding: buttonPadding,
-              child: const FaIcon(Pencil.pencilIcon, size: 16),
+                  _showPenPopup(
+                    layerLink: _pencilLayerLink,
+                    getTool: () => Pencil.currentPencil,
+                  );
+                },
+                padding: buttonPadding,
+                child: const FaIcon(Pencil.pencilIcon, size: 16),
+              ),
             ),
-            ToolbarIconButton(
-              tooltip: t.editor.pens.highlighter,
-              selected: widget.currentTool == Highlighter.currentHighlighter,
-              enabled: !widget.readOnly,
-              onPressed: () {
-                if (widget.currentTool == Highlighter.currentHighlighter) {
-                  if (toolOptionsType.value == ToolOptions.highlighter) {
+            // ── Highlighter button with popup anchor ──
+            CompositedTransformTarget(
+              link: _highlighterLayerLink,
+              child: ToolbarIconButton(
+                tooltip: t.editor.pens.highlighter,
+                selected: widget.currentTool == Highlighter.currentHighlighter,
+                enabled: !widget.readOnly,
+                onPressed: () {
+                  if (widget.currentTool != Highlighter.currentHighlighter) {
                     toolOptionsType.value = ToolOptions.hide;
-                  } else {
-                    toolOptionsType.value = ToolOptions.highlighter;
+                    widget.setTool(Highlighter.currentHighlighter);
                   }
-                } else {
-                  toolOptionsType.value = ToolOptions.hide;
-                  widget.setTool(Highlighter.currentHighlighter);
-                }
-              },
-              padding: buttonPadding,
-              child: const FaIcon(Highlighter.highlighterIcon, size: 16),
+                  _showPenPopup(
+                    layerLink: _highlighterLayerLink,
+                    getTool: () => Highlighter.currentHighlighter,
+                  );
+                },
+                padding: buttonPadding,
+                child: const FaIcon(Highlighter.highlighterIcon, size: 16),
+              ),
             ),
-            ValueListenableBuilder(
-              valueListenable: showColorOptions,
-              builder: (context, showColorOptions, child) {
-                return ToolbarIconButton(
-                  tooltip: t.editor.toolbar.toggleColors,
-                  selected: showColorOptions,
-                  enabled: !widget.readOnly,
-                  onPressed: toggleColorOptions,
-                  padding: buttonPadding,
-                  child: child!,
-                );
-              },
-              child: currentColor == null
-                  ? const Icon(Icons.palette)
-                  : Container(
-                      width: 18,
-                      height: 18,
-                      decoration: BoxDecoration(
-                        color: currentColor
-                            .withInversion(invert)
-                            .withValues(alpha: 1),
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: colorScheme.primary,
-                          width: 2,
+            // ── Color button with popup anchor ──
+            CompositedTransformTarget(
+              link: _colorLayerLink,
+              child: ToolbarIconButton(
+                tooltip: t.editor.toolbar.toggleColors,
+                selected: _colorPopupOverlay != null,
+                enabled: !widget.readOnly,
+                onPressed: () => _showColorPopup(layerLink: _colorLayerLink),
+                padding: buttonPadding,
+                child: currentColor == null
+                    ? const Icon(Icons.palette)
+                    : Container(
+                        width: 18,
+                        height: 18,
+                        decoration: BoxDecoration(
+                          color: currentColor
+                              .withInversion(invert)
+                              .withValues(alpha: 1),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: colorScheme.primary,
+                            width: 2,
+                          ),
                         ),
                       ),
-                    ),
+              ),
             ),
             ToolbarIconButton(
               tooltip: t.editor.toolbar.select,
               selected: widget.currentTool is Select,
               enabled: !widget.readOnly,
               onPressed: () {
+                _hidePenPopup();
                 toolOptionsType.value = ToolOptions.hide;
                 widget.setTool(Select.currentSelect);
               },
@@ -467,6 +614,7 @@ class _ToolbarState extends State<Toolbar> with SingleTickerProviderStateMixin {
               selected: widget.currentTool == LaserPointer.currentLaserPointer,
               enabled: true,
               onPressed: () {
+                _hidePenPopup();
                 toolOptionsType.value = ToolOptions.hide;
                 widget.setTool(LaserPointer.currentLaserPointer);
               },
@@ -486,6 +634,7 @@ class _ToolbarState extends State<Toolbar> with SingleTickerProviderStateMixin {
               selected: widget.currentTool is Link,
               enabled: !widget.readOnly,
               onPressed: () {
+                _hidePenPopup();
                 toolOptionsType.value = ToolOptions.hide;
                 widget.setTool(Link.currentLink);
               },
@@ -605,14 +754,10 @@ class _ToolbarState extends State<Toolbar> with SingleTickerProviderStateMixin {
           shadowColor: Colors.black.withValues(alpha: 0.25),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(24),
-            child: SingleChildScrollView(
-              physics: const NeverScrollableScrollPhysics(),
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [...subPanelContent, toolButtons],
-              ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [...subPanelContent, toolButtons],
             ),
           ),
         ),
@@ -653,6 +798,9 @@ class _ToolbarState extends State<Toolbar> with SingleTickerProviderStateMixin {
 
   @override
   void dispose() {
+    _hidePenPopup();
+    _hideColorPopup();
+
     DynamicMaterialApp.removeFullscreenListener(_setState);
     DynamicMaterialApp.setFullscreen(false, updateSystem: true);
 
@@ -663,3 +811,54 @@ class _ToolbarState extends State<Toolbar> with SingleTickerProviderStateMixin {
 }
 
 enum ToolOptions { hide, pen, highlighter, pencil, select }
+
+/// A widget that animates its child with a vertical expand animation.
+/// The child expands from the bottom upward.
+class _AnimatedPopup extends StatefulWidget {
+  const _AnimatedPopup({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_AnimatedPopup> createState() => _AnimatedPopupState();
+}
+
+class _AnimatedPopupState extends State<_AnimatedPopup>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 200),
+    );
+    _animation = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
+    _controller.forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _animation,
+      builder: (context, child) {
+        return ClipRect(
+          child: Align(
+            alignment: Alignment.bottomCenter,
+            heightFactor: _animation.value,
+            child: child,
+          ),
+        );
+      },
+      child: widget.child,
+    );
+  }
+}

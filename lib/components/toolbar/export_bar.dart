@@ -91,10 +91,11 @@ class _ExportBarState extends State<ExportBar> {
 
     return Center(
       child: Padding(
-        padding: const .all(8),
-        child: SingleChildScrollView(
-          scrollDirection: widget.axis,
-          child: Flex(direction: widget.axis, children: children),
+        padding: const EdgeInsets.all(8),
+        child: Flex(
+          direction: widget.axis,
+          mainAxisSize: MainAxisSize.min,
+          children: children,
         ),
       ),
     );

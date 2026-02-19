@@ -32,29 +32,17 @@ class _SizePickerState extends State<SizePicker> {
     return Flex(
       direction: widget.axis,
       mainAxisSize: .min,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Column(
-          children: [
-            Text(
-              t.editor.penOptions.size,
-              style: TextStyle(
-                color: colorScheme.onSurface.withValues(alpha: 0.8),
-                fontSize: 10,
-                height: 1,
-              ),
-            ),
-            Text(_prettyNum(widget.pen.options.size)),
-          ],
-        ),
-        const SizedBox(width: 8),
-        Padding(
-          padding: const .symmetric(vertical: 8),
-          child: _SizeSlider(
-            pen: widget.pen,
-            axis: widget.axis,
-            setState: setState,
+        Text(
+          '${t.editor.penOptions.size}: ${_prettyNum(widget.pen.options.size)}',
+          style: TextStyle(
+            color: colorScheme.onSurface.withValues(alpha: 0.8),
+            fontSize: 12,
           ),
         ),
+        const SizedBox(width: 8),
+        _SizeSlider(pen: widget.pen, axis: widget.axis, setState: setState),
       ],
     );
   }
@@ -90,23 +78,19 @@ class _SizeSlider extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = ColorScheme.of(context);
-    return GestureDetector(
-      onHorizontalDragStart: axis == Axis.horizontal
-          ? (details) =>
-                onDrag(details.localPosition.dx / SizePicker.largeLength)
-          : null,
-      onHorizontalDragUpdate: axis == Axis.horizontal
-          ? (details) =>
-                onDrag(details.localPosition.dx / SizePicker.largeLength)
-          : null,
-      onVerticalDragStart: axis == Axis.vertical
-          ? (details) =>
-                onDrag(details.localPosition.dy / SizePicker.largeLength)
-          : null,
-      onVerticalDragUpdate: axis == Axis.vertical
-          ? (details) =>
-                onDrag(details.localPosition.dy / SizePicker.largeLength)
-          : null,
+    return Listener(
+      onPointerDown: (event) {
+        final position = axis == Axis.horizontal
+            ? event.localPosition.dx
+            : event.localPosition.dy;
+        onDrag(position / SizePicker.largeLength);
+      },
+      onPointerMove: (event) {
+        final position = axis == Axis.horizontal
+            ? event.localPosition.dx
+            : event.localPosition.dy;
+        onDrag(position / SizePicker.largeLength);
+      },
       child: RotatedBox(
         quarterTurns: axis == Axis.horizontal ? 0 : 1,
         child: CustomPaint(
