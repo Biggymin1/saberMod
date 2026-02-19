@@ -4,10 +4,16 @@ import 'package:saber/data/tools/pen.dart';
 import 'package:saber/i18n/strings.g.dart';
 
 class SizePicker extends StatefulWidget {
-  const SizePicker({super.key, required this.axis, required this.pen});
+  const SizePicker({
+    super.key,
+    required this.axis,
+    required this.pen,
+    this.onSizeChanged,
+  });
 
   final Axis axis;
   final Pen pen;
+  final VoidCallback? onSizeChanged;
 
   @override
   State<SizePicker> createState() => _SizePickerState();
@@ -42,7 +48,12 @@ class _SizePickerState extends State<SizePicker> {
           ),
         ),
         const SizedBox(width: 8),
-        _SizeSlider(pen: widget.pen, axis: widget.axis, setState: setState),
+        _SizeSlider(
+          pen: widget.pen,
+          axis: widget.axis,
+          setState: setState,
+          onSizeChanged: widget.onSizeChanged,
+        ),
       ],
     );
   }
@@ -55,11 +66,13 @@ class _SizeSlider extends StatelessWidget {
     required this.pen,
     required this.axis,
     required this.setState,
+    this.onSizeChanged,
   });
 
   final Pen pen;
   final Axis axis;
   final void Function(void Function()) setState;
+  final VoidCallback? onSizeChanged;
 
   /// [percent] is a value between 0 and 1
   /// where 0 is the start of the slider and 1 is the end.
@@ -73,6 +86,7 @@ class _SizeSlider extends StatelessWidget {
     setState(() {
       pen.options.size = newSize;
     });
+    onSizeChanged?.call();
   }
 
   @override

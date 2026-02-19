@@ -25,6 +25,7 @@ import 'package:saber/data/tools/highlighter.dart';
 import 'package:saber/data/tools/laser_pointer.dart';
 import 'package:saber/data/tools/link.dart';
 import 'package:saber/data/tools/pen.dart';
+import 'package:saber/data/tools/pen_preset.dart';
 import 'package:saber/data/tools/pencil.dart';
 import 'package:saber/data/tools/select.dart';
 import 'package:saber/i18n/strings.g.dart';
@@ -104,6 +105,9 @@ class _ToolbarState extends State<Toolbar> with SingleTickerProviderStateMixin {
 
   // Layer links for anchoring pen/pencil/highlighter/color popups to their buttons.
   final _penLayerLink = LayerLink();
+  final _penPreset1LayerLink = LayerLink();
+  final _penPreset2LayerLink = LayerLink();
+  final _penPreset3LayerLink = LayerLink();
   final _pencilLayerLink = LayerLink();
   final _highlighterLayerLink = LayerLink();
   final _colorLayerLink = LayerLink();
@@ -113,6 +117,9 @@ class _ToolbarState extends State<Toolbar> with SingleTickerProviderStateMixin {
 
   /// The currently-open color popup overlay, if any.
   OverlayEntry? _colorPopupOverlay;
+
+  /// Which preset is currently being edited (1, 2, 3, or null for main pen).
+  int? _activePresetIndex;
 
   @override
   void initState() {
@@ -220,16 +227,20 @@ class _ToolbarState extends State<Toolbar> with SingleTickerProviderStateMixin {
 
   /// Shows the pen options popup anchored to [layerLink].
   /// [getTool] returns the pen whose options are shown.
+  /// [presetIndex] is the preset number (1, 2, or 3) if editing a preset, or null for main pen.
   /// If the popup is already showing for the same link, it is dismissed instead.
   void _showPenPopup({
     required LayerLink layerLink,
     required Tool Function() getTool,
+    int? presetIndex,
   }) {
     // If a popup is already open, close it (toggle off).
     if (_penPopupOverlay != null) {
       _hidePenPopup();
       return;
     }
+
+    _activePresetIndex = presetIndex;
 
     late OverlayEntry entry;
     entry = OverlayEntry(
@@ -268,11 +279,26 @@ class _ToolbarState extends State<Toolbar> with SingleTickerProviderStateMixin {
                           getTool: getTool,
                           setTool: (pen) {
                             widget.setTool(pen);
+                            // Save to preset if editing a preset
+                            if (presetIndex != null) {
+                              _saveToPreset(pen, presetIndex);
+                            }
                             // Rebuild the popup to reflect new pen type/options.
                             setPopupState(() {});
                             // Also rebuild the toolbar so the button icon updates.
                             setState(() {});
                           },
+                          onSizeChanged: presetIndex != null
+                              ? () {
+                                  // Save to preset when size changes
+                                  if (widget.currentTool is Pen) {
+                                    _saveToPreset(
+                                      widget.currentTool as Pen,
+                                      presetIndex,
+                                    );
+                                  }
+                                }
+                              : null,
                         );
                       },
                     ),
@@ -287,6 +313,34 @@ class _ToolbarState extends State<Toolbar> with SingleTickerProviderStateMixin {
 
     _penPopupOverlay = entry;
     Overlay.of(context).insert(entry);
+  }
+
+  /// Saves the current pen settings to a preset.
+  void _saveToPreset(Pen pen, int presetIndex) {
+    final PenType penType = switch (pen.toolId) {
+      ToolId.fountainPen => PenType.fountainPen,
+      ToolId.ballpointPen => PenType.ballpointPen,
+      ToolId.shapePen => PenType.shapePen,
+      _ => PenType.fountainPen,
+    };
+
+    final preset = PenPreset(
+      color: pen.color,
+      options: pen.options,
+      penType: penType,
+    );
+
+    switch (presetIndex) {
+      case 1:
+        stows.penPreset1.value = preset;
+        break;
+      case 2:
+        stows.penPreset2.value = preset;
+        break;
+      case 3:
+        stows.penPreset3.value = preset;
+        break;
+    }
   }
 
   void _hidePenPopup() {
@@ -350,6 +404,12 @@ class _ToolbarState extends State<Toolbar> with SingleTickerProviderStateMixin {
                           axis: Axis.vertical,
                           setColor: (color) {
                             widget.setColor(color);
+                            // Save color to active preset if editing a preset
+                            if (_activePresetIndex != null &&
+                                widget.currentTool is Pen) {
+                              final pen = widget.currentTool as Pen;
+                              _saveToPreset(pen, _activePresetIndex!);
+                            }
                             setPopupState(() {});
                             setState(() {});
                           },
@@ -528,6 +588,114 @@ class _ToolbarState extends State<Toolbar> with SingleTickerProviderStateMixin {
                 child: FaIcon(Pen.currentPen.icon, size: 16),
               ),
             ),
+            // ── Pen Preset 1 button ──
+            ValueListenableBuilder(
+              valueListenable: stows.penPreset1,
+              builder: (context, preset1, _) {
+                final preset = preset1 as PenPreset;
+                final presetPen = preset.createPen();
+                final isSelected =
+                    widget.currentTool is Pen &&
+                    (widget.currentTool as Pen).color.value ==
+                        preset.color.value &&
+                    widget.currentTool.toolId == preset.penType.toolId;
+                return CompositedTransformTarget(
+                  link: _penPreset1LayerLink,
+                  child: ToolbarIconButton(
+                    tooltip: '${t.editor.pens.preset} 1',
+                    selected: isSelected,
+                    enabled: !widget.readOnly,
+                    onPressed: () {
+                      toolOptionsType.value = ToolOptions.hide;
+                      widget.setTool(presetPen);
+                      _showPenPopup(
+                        layerLink: _penPreset1LayerLink,
+                        getTool: () => stows.penPreset1.value.createPen(),
+                        presetIndex: 1,
+                      );
+                    },
+                    padding: buttonPadding,
+                    child: FaIcon(
+                      preset.penType.icon,
+                      size: 16,
+                      color: preset.color.withInversion(invert),
+                    ),
+                  ),
+                );
+              },
+            ),
+            // ── Pen Preset 2 button ──
+            ValueListenableBuilder(
+              valueListenable: stows.penPreset2,
+              builder: (context, preset2, _) {
+                final preset = preset2 as PenPreset;
+                final presetPen = preset.createPen();
+                final isSelected =
+                    widget.currentTool is Pen &&
+                    (widget.currentTool as Pen).color.value ==
+                        preset.color.value &&
+                    widget.currentTool.toolId == preset.penType.toolId;
+                return CompositedTransformTarget(
+                  link: _penPreset2LayerLink,
+                  child: ToolbarIconButton(
+                    tooltip: '${t.editor.pens.preset} 2',
+                    selected: isSelected,
+                    enabled: !widget.readOnly,
+                    onPressed: () {
+                      toolOptionsType.value = ToolOptions.hide;
+                      widget.setTool(presetPen);
+                      _showPenPopup(
+                        layerLink: _penPreset2LayerLink,
+                        getTool: () => stows.penPreset2.value.createPen(),
+                        presetIndex: 2,
+                      );
+                    },
+                    padding: buttonPadding,
+                    child: FaIcon(
+                      preset.penType.icon,
+                      size: 16,
+                      color: preset.color.withInversion(invert),
+                    ),
+                  ),
+                );
+              },
+            ),
+            // ── Pen Preset 3 button ──
+            ValueListenableBuilder(
+              valueListenable: stows.penPreset3,
+              builder: (context, preset3, _) {
+                final preset = preset3 as PenPreset;
+                final presetPen = preset.createPen();
+                final isSelected =
+                    widget.currentTool is Pen &&
+                    (widget.currentTool as Pen).color.value ==
+                        preset.color.value &&
+                    widget.currentTool.toolId == preset.penType.toolId;
+                return CompositedTransformTarget(
+                  link: _penPreset3LayerLink,
+                  child: ToolbarIconButton(
+                    tooltip: '${t.editor.pens.preset} 3',
+                    selected: isSelected,
+                    enabled: !widget.readOnly,
+                    onPressed: () {
+                      toolOptionsType.value = ToolOptions.hide;
+                      widget.setTool(presetPen);
+                      _showPenPopup(
+                        layerLink: _penPreset3LayerLink,
+                        getTool: () => stows.penPreset3.value.createPen(),
+                        presetIndex: 3,
+                      );
+                    },
+                    padding: buttonPadding,
+                    child: FaIcon(
+                      preset.penType.icon,
+                      size: 16,
+                      color: preset.color.withInversion(invert),
+                    ),
+                  ),
+                );
+              },
+            ),
             // ── Pencil button with popup anchor ──
             CompositedTransformTarget(
               link: _pencilLayerLink,
@@ -676,21 +844,6 @@ class _ToolbarState extends State<Toolbar> with SingleTickerProviderStateMixin {
                   );
                 },
               ),
-            ToolbarIconButton(
-              tooltip: t.editor.toolbar.fullscreen,
-              selected: DynamicMaterialApp.isFullscreen,
-              enabled: !widget.readOnly,
-              onPressed: toggleFullscreen,
-              padding: buttonPadding,
-              child: AdaptiveIcon(
-                icon: DynamicMaterialApp.isFullscreen
-                    ? Icons.fullscreen_exit
-                    : Icons.fullscreen,
-                cupertinoIcon: DynamicMaterialApp.isFullscreen
-                    ? CupertinoIcons.fullscreen_exit
-                    : CupertinoIcons.fullscreen,
-              ),
-            ),
             Wrap(
               direction: isToolbarVertical ? Axis.vertical : Axis.horizontal,
               children: [
@@ -802,7 +955,6 @@ class _ToolbarState extends State<Toolbar> with SingleTickerProviderStateMixin {
     _hideColorPopup();
 
     DynamicMaterialApp.removeFullscreenListener(_setState);
-    DynamicMaterialApp.setFullscreen(false, updateSystem: true);
 
     _expandController.dispose();
     _removeKeybindings();

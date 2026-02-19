@@ -15,6 +15,7 @@ import 'package:saber/data/sentry/sentry_consent.dart';
 import 'package:saber/data/tools/_tool.dart';
 import 'package:saber/data/tools/highlighter.dart';
 import 'package:saber/data/tools/pen.dart';
+import 'package:saber/data/tools/pen_preset.dart';
 import 'package:stow/stow.dart';
 import 'package:stow_codecs/stow_codecs.dart';
 import 'package:stow_plain/stow_plain.dart';
@@ -302,6 +303,29 @@ class Stows {
         Colors.black.toARGB32(),
         volatile: !_isOnMainIsolate,
       );
+
+  /// Pen presets for quick access in toolbar
+  static PenPreset _penPresetFromJson(Object json) =>
+      PenPreset.fromJson(json as Map<String, dynamic>);
+  final penPreset1 = PlainStow.json(
+        'penPreset1',
+        PenPreset.defaultPreset1,
+        fromJson: _penPresetFromJson,
+        volatile: !_isOnMainIsolate,
+      ),
+      penPreset2 = PlainStow.json(
+        'penPreset2',
+        PenPreset.defaultPreset2,
+        fromJson: _penPresetFromJson,
+        volatile: !_isOnMainIsolate,
+      ),
+      penPreset3 = PlainStow.json(
+        'penPreset3',
+        PenPreset.defaultPreset3,
+        fromJson: _penPresetFromJson,
+        volatile: !_isOnMainIsolate,
+      );
+
   final lastBackgroundPattern = PlainStow(
     'lastBackgroundPattern',
     CanvasBackgroundPattern.none,

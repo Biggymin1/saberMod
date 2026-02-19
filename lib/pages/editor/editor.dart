@@ -870,13 +870,12 @@ class EditorState extends State<Editor> {
         );
       } else if (currentTool is Eraser) {
         final erased = (currentTool as Eraser).onDragEnd();
-        if (tmpTool != null &&
-            (stylusButtonPressed || stows.disableEraserAfterUse.value)) {
+        if (tmpTool != null && stows.disableEraserAfterUse.value) {
           // restore previous tool
-          stylusButtonPressed = false;
           currentTool = tmpTool!;
           tmpTool = null;
         }
+        stylusButtonPressed = false;
         if (erased.isEmpty) return;
         history.recordChange(
           EditorHistoryItem(
@@ -1717,18 +1716,6 @@ class EditorState extends State<Editor> {
                 readOnly: coreInfo.readOnly,
                 setTool: (tool) {
                   setState(() {
-                    if (tool is Eraser) {
-                      // setTool(Eraser) is called to toggle eraser
-                      if (currentTool is Eraser && tmpTool != null) {
-                        // switch to previous tool
-                        tool = tmpTool!;
-                        tmpTool = null;
-                      } else {
-                        // store previous tool to restore it later
-                        tmpTool = currentTool;
-                      }
-                    }
-
                     currentTool = tool;
 
                     if (currentTool is Highlighter) {

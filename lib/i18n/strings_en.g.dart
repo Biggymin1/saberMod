@@ -1046,6 +1046,9 @@ class TranslationsEditorPensEn {
 
 	/// en: 'Laser pointer'
 	String get laserPointer => 'Laser pointer';
+
+	/// en: 'Preset'
+	String get preset => 'Preset';
 }
 
 // Path: editor.penOptions

@@ -12,10 +12,16 @@ import 'package:saber/data/tools/shape_pen.dart';
 import 'package:saber/i18n/strings.g.dart';
 
 class PenModal extends StatefulWidget {
-  const PenModal({super.key, required this.getTool, required this.setTool});
+  const PenModal({
+    super.key,
+    required this.getTool,
+    required this.setTool,
+    this.onSizeChanged,
+  });
 
   final Tool Function() getTool;
   final void Function(Pen) setTool;
+  final VoidCallback? onSizeChanged;
 
   @override
   State<PenModal> createState() => _PenModalState();
@@ -37,7 +43,11 @@ class _PenModalState extends State<PenModal> {
       direction: axis,
       mainAxisAlignment: .center,
       children: [
-        SizePicker(axis: axis, pen: currentPen),
+        SizePicker(
+          axis: axis,
+          pen: currentPen,
+          onSizeChanged: widget.onSizeChanged,
+        ),
         if (currentPen is! Highlighter && currentPen is! Pencil) ...[
           const SizedBox.square(dimension: 8),
           IconButton(

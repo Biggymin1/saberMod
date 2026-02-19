@@ -278,6 +278,7 @@ editor:
     pencil: Pencil
     shapePen: Shape pen
     laserPointer: Laser pointer
+    preset: Preset
   penOptions: 
     size: Size
   colors: 
