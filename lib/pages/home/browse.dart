@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:collapsible/collapsible.dart';
 import 'package:flutter/material.dart';
@@ -35,6 +36,9 @@ class _BrowsePageState extends State<BrowsePage> {
   DirectoryChildren? children;
 
   String? path;
+
+  /// External folder path when browsing a user-selected directory
+  String? externalFolderPath;
 
   final ValueNotifier<List<String>> selectedFiles = ValueNotifier([]);
 
@@ -75,6 +79,13 @@ class _BrowsePageState extends State<BrowsePage> {
       if (!location.startsWith(RoutePaths.prefixOfHome)) return;
     }
 
+    // If we're browsing an external folder
+    if (externalFolderPath != null) {
+      children = await _getExternalDirectoryChildren(externalFolderPath!, path);
+      if (mounted) setState(() {});
+      return;
+    }
+
     children =
         BrowsePage.overrideChildren ??
         await FileManager.getChildrenOfDirectory(path ?? '/');
@@ -82,15 +93,73 @@ class _BrowsePageState extends State<BrowsePage> {
     if (mounted) setState(() {});
   }
 
+  /// Get children of an external directory (outside the app's documents directory)
+  Future<DirectoryChildren?> _getExternalDirectoryChildren(
+    String externalPath,
+    String? relativePath,
+  ) async {
+    try {
+      final fullPath = relativePath != null && relativePath.isNotEmpty
+          ? p.join(externalPath, relativePath)
+          : externalPath;
+      final dir = Directory(fullPath);
+      if (!dir.existsSync()) return null;
+
+      final directories = <String>[];
+      final files = <String>[];
+
+      await for (final entity in dir.list()) {
+        final name = p.basename(entity.path);
+        if (entity is Directory) {
+          directories.add(name);
+        } else if (entity is File) {
+          // Only show note files
+          if (name.endsWith(Editor.extension) ||
+              name.endsWith(Editor.extensionOldJson)) {
+            files.add(name);
+          }
+        }
+      }
+
+      return DirectoryChildren(directories, files);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// Handle when user chooses an external working folder
+  Future<void> onChooseWorkingFolder(String externalPath) async {
+    externalFolderPath = externalPath;
+    path = null; // Reset relative path
+    selectedFiles.value = [];
+    await findChildrenOfPath();
+  }
+
   void onDirectoryTap(String folder) {
     selectedFiles.value = [];
     if (folder == '..') {
-      path = p.dirname(path ?? '/');
-      if (path == '/') path = null;
+      // If in external folder mode
+      if (externalFolderPath != null) {
+        if (path == null || path == '/') {
+          // Exit external folder mode
+          externalFolderPath = null;
+          path = null;
+        } else {
+          path = p.dirname(path ?? '/');
+          if (path == '/') path = null;
+        }
+      } else {
+        path = p.dirname(path ?? '/');
+        if (path == '/') path = null;
+      }
     } else {
       path = p.join(path ?? '/', folder);
     }
-    context.go(HomeRoutes.browseFilePath(path ?? '/'));
+
+    // Only update route if not in external folder mode
+    if (externalFolderPath == null) {
+      context.go(HomeRoutes.browseFilePath(path ?? '/'));
+    }
     findChildrenOfPath();
   }
 
@@ -146,6 +215,7 @@ class _BrowsePageState extends State<BrowsePage> {
               child: PathComponents(
                 path,
                 onPathComponentTap: onPathComponentTap,
+                externalFolderPath: externalFolderPath,
               ),
             ),
             const SliverPadding(padding: .only(bottom: 16)),
@@ -178,6 +248,8 @@ class _BrowsePageState extends State<BrowsePage> {
                 for (final directoryPath in children?.directories ?? const [])
                   directoryPath,
               ],
+              onChooseWorkingFolder: onChooseWorkingFolder,
+              isExternalFolder: externalFolderPath != null,
             ),
             if (children == null) ...[
               // loading
@@ -209,6 +281,7 @@ class _BrowsePageState extends State<BrowsePage> {
       floatingActionButton: NewNoteButton(
         cupertino: platform.isCupertino,
         path: path,
+        externalFolderPath: externalFolderPath,
       ),
       persistentFooterButtons: selectedFiles.value.isEmpty
           ? null

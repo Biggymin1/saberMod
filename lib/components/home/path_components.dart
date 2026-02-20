@@ -1,11 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:saber/i18n/strings.g.dart';
 
 class PathComponents extends StatelessWidget {
-  PathComponents(String? path, {super.key, required this.onPathComponentTap})
-    : components = _splitPath(path);
+  PathComponents(
+    String? path, {
+    super.key,
+    required this.onPathComponentTap,
+    this.externalFolderPath,
+  }) : components = _splitPath(path);
 
   final List<String> components;
   final void Function(String? path) onPathComponentTap;
+
+  /// External folder path when browsing a user-selected directory
+  final String? externalFolderPath;
 
   @override
   Widget build(BuildContext context) {
@@ -25,7 +33,26 @@ class PathComponents extends StatelessWidget {
         child: Wrap(
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            if (components.isNotEmpty)
+            // External folder indicator
+            if (externalFolderPath != null) ...[
+              ElevatedButton(
+                onPressed: () {
+                  onPathComponentTap(null);
+                },
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.folder_open,
+                      size: 16,
+                      color: colorScheme.primary,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(t.home.externalFolder),
+                  ],
+                ),
+              ),
+            ] else if (components.isNotEmpty)
               ElevatedButton(
                 onPressed: () {
                   onPathComponentTap(null);

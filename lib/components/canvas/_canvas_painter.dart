@@ -354,14 +354,11 @@ class CanvasPainter extends CustomPainter {
     );
   }
 
+  static const _zoomThreshold = 0.9;
   static MaskFilter _getPencilMaskFilter(double size) =>
       MaskFilter.blur(BlurStyle.normal, min(size * 0.2, 3));
   bool shouldUsePencilShader(double strokeSize) =>
       currentScale >= _zoomThreshold && (strokeSize * currentScale) >= 3;
 
-  static const _zoomThreshold = 0.9;
-  Path _selectPath(Stroke stroke) => switch (currentScale) {
-    < _zoomThreshold => stroke.lowQualityPath,
-    _ => stroke.highQualityPath,
-  };
+  Path _selectPath(Stroke stroke) => stroke.highQualityPath;
 }

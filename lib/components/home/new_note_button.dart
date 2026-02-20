@@ -1,7 +1,10 @@
+import 'dart:io';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_speed_dial/flutter_speed_dial.dart';
 import 'package:go_router/go_router.dart';
+import 'package:path/path.dart' as p;
 import 'package:saber/components/navbar/horizontal_navbar.dart';
 import 'package:saber/components/theming/saber_theme.dart';
 import 'package:saber/data/file_manager/file_manager.dart';
@@ -10,10 +13,18 @@ import 'package:saber/i18n/strings.g.dart';
 import 'package:saber/pages/editor/editor.dart';
 
 class NewNoteButton extends StatefulWidget {
-  const NewNoteButton({super.key, required this.cupertino, this.path});
+  const NewNoteButton({
+    super.key,
+    required this.cupertino,
+    this.path,
+    this.externalFolderPath,
+  });
 
   final bool cupertino;
   final String? path;
+
+  /// External folder path when browsing a user-selected directory
+  final String? externalFolderPath;
 
   @override
   State<NewNoteButton> createState() => _NewNoteButtonState();
@@ -64,7 +75,37 @@ class _NewNoteButtonState extends State<NewNoteButton> {
           child: const Icon(Icons.create),
           label: t.home.create.newNote,
           onTap: () async {
-            if (widget.path == null) {
+            // If we're in an external folder
+            if (widget.externalFolderPath != null) {
+              final externalPath = widget.externalFolderPath!;
+              final relativePath = widget.path ?? '';
+              final fullPath = relativePath.isEmpty
+                  ? externalPath
+                  : p.join(externalPath, relativePath);
+
+              // Generate a unique file name
+              final now = DateTime.now();
+              final fileName =
+                  '${now.year.toString().substring(2)}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')} ${t.editor.untitled}';
+
+              // Find a unique file path
+              String newFilePath = p.join(fullPath, fileName);
+              int suffix = 1;
+              while (File('$newFilePath${Editor.extension}').existsSync()) {
+                newFilePath = p.join(fullPath, '$fileName ($suffix)');
+                suffix++;
+              }
+
+              // Create the directory if needed
+              final dir = Directory(fullPath);
+              if (!dir.existsSync()) {
+                await dir.create(recursive: true);
+              }
+
+              // Navigate to editor with external path
+              if (!context.mounted) return;
+              context.push(RoutePaths.editFilePath(newFilePath));
+            } else if (widget.path == null) {
               context.push(RoutePaths.edit);
             } else {
               final newFilePath = await FileManager.newFilePath(

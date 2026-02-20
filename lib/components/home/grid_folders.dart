@@ -1,3 +1,4 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
@@ -20,6 +21,8 @@ class GridFolders extends StatelessWidget {
     required this.deleteFolder,
     required this.doesFolderExist,
     required this.folders,
+    this.onChooseWorkingFolder,
+    this.isExternalFolder = false,
   });
 
   final bool isAtRoot;
@@ -34,11 +37,18 @@ class GridFolders extends StatelessWidget {
 
   final List<String> folders;
 
+  /// Callback when user chooses to open an external working folder
+  final Future<void> Function(String externalPath)? onChooseWorkingFolder;
+
+  /// Whether we're currently browsing an external folder
+  final bool isExternalFolder;
+
   @override
   Widget build(BuildContext context) {
     /// The cards that come before the actual folders
     final extraCards = <_FolderCardType>[
       if (!isAtRoot) .backFolder,
+      if (!isExternalFolder && isAtRoot) .chooseWorkingFolder,
       .newFolder,
     ];
 
@@ -62,6 +72,7 @@ class GridFolders extends StatelessWidget {
             isFolderEmpty: isFolderEmpty,
             deleteFolder: deleteFolder,
             onTap: onTap,
+            onChooseWorkingFolder: onChooseWorkingFolder,
           );
         },
       ),
@@ -81,6 +92,7 @@ class _GridFolder extends StatefulWidget {
     required this.isFolderEmpty,
     required this.deleteFolder,
     required this.onTap,
+    this.onChooseWorkingFolder,
   }) : assert(
          (folderName == null) ^ (cardType == .realFolder),
          'Real folders must specify a folder name',
@@ -94,6 +106,7 @@ class _GridFolder extends StatefulWidget {
   final Future<bool> Function(String) isFolderEmpty;
   final Future<void> Function(String) deleteFolder;
   final Function(String) onTap;
+  final Future<void> Function(String externalPath)? onChooseWorkingFolder;
 
   @override
   State<_GridFolder> createState() => _GridFolderState();
@@ -112,7 +125,7 @@ class _GridFolderState extends State<_GridFolder> {
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
-        onTap: () {
+        onTap: () async {
           if (expanded.value) return;
           switch (widget.cardType) {
             case .newFolder:
@@ -127,6 +140,13 @@ class _GridFolderState extends State<_GridFolder> {
               widget.onTap('..');
             case .realFolder:
               widget.onTap(widget.folderName!);
+            case .chooseWorkingFolder:
+              final directory = await FilePicker.platform.getDirectoryPath(
+                dialogTitle: t.home.chooseWorkingFolder,
+              );
+              if (directory != null && widget.onChooseWorkingFolder != null) {
+                await widget.onChooseWorkingFolder!(directory);
+              }
           }
         },
         onLongPress: widget.cardType == .realFolder
@@ -152,18 +172,22 @@ class _GridFolderState extends State<_GridFolder> {
                             .backFolder => t.home.backFolder,
                             .newFolder => t.home.newFolder.newFolder,
                             .realFolder => '',
+                            .chooseWorkingFolder => t.home.chooseWorkingFolder,
                           },
                           child: AdaptiveIcon(
                             icon: switch (widget.cardType) {
                               .backFolder => Icons.folder_open,
                               .newFolder => Icons.create_new_folder,
                               .realFolder => Icons.folder,
+                              .chooseWorkingFolder => Icons.drive_folder_upload,
                             },
                             cupertinoIcon: switch (widget.cardType) {
                               .backFolder => CupertinoIcons.folder_open,
                               .newFolder =>
                                 CupertinoIcons.folder_fill_badge_plus,
                               .realFolder => CupertinoIcons.folder_fill,
+                              .chooseWorkingFolder =>
+                                CupertinoIcons.folder_badge_plus,
                             },
                             size: 50,
                           ),
@@ -233,6 +257,7 @@ class _GridFolderState extends State<_GridFolder> {
                   .backFolder => const Icon(Icons.arrow_back),
                   .newFolder => Text(t.home.newFolder.newFolder),
                   .realFolder => Text(widget.folderName!),
+                  .chooseWorkingFolder => Text(t.home.chooseWorkingFolder),
                 },
               ],
             ),
@@ -243,4 +268,4 @@ class _GridFolderState extends State<_GridFolder> {
   }
 }
 
-enum _FolderCardType { backFolder, newFolder, realFolder }
+enum _FolderCardType { backFolder, chooseWorkingFolder, newFolder, realFolder }

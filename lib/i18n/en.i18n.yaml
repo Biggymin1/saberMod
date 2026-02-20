@@ -61,6 +61,8 @@ home:
     deleteName: Delete $f
     delete: Delete
     alsoDeleteContents: Also delete all notes inside this folder
+  chooseWorkingFolder: Choose working folder
+  externalFolder: External folder
 sentry: 
   consent: 
     title: Help improve Saber?

@@ -104,6 +104,12 @@ class TranslationsHomeEn {
 
 	late final TranslationsHomeRenameFolderEn renameFolder = TranslationsHomeRenameFolderEn.internal(_root);
 	late final TranslationsHomeDeleteFolderEn deleteFolder = TranslationsHomeDeleteFolderEn.internal(_root);
+
+	/// en: 'Choose working folder'
+	String get chooseWorkingFolder => 'Choose working folder';
+
+	/// en: 'External folder'
+	String get externalFolder => 'External folder';
 }
 
 // Path: sentry
